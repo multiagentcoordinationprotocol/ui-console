@@ -12,7 +12,7 @@ export function BarChartCard({ title, data, height = 260 }: { title: string; dat
       </CardHeader>
       <CardContent>
         <div style={{ width: '100%', height }}>
-          <ResponsiveContainer>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="4 4" stroke="rgba(148,163,184,0.12)" />
               <XAxis dataKey="label" stroke="rgba(148,163,184,0.7)" tickLine={false} axisLine={false} />
