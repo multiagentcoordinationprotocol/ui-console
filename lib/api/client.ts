@@ -50,6 +50,7 @@ import type {
   RuntimeRootDescriptor,
   ScenarioSummary,
   TraceSummary,
+  ValidateRunResponse,
   WebhookSubscription
 } from '@/lib/types';
 import { fetchJson } from '@/lib/api/fetcher';
@@ -68,6 +69,22 @@ function listAllScenarios(): ScenarioSummary[] {
 
 function listAllEvents(): CanonicalEvent[] {
   return Object.values(MOCK_RUN_EVENTS).flatMap((items) => items);
+}
+
+/** Map flat CP run response to the RunRecord shape the UI expects. */
+function normalizeRun(raw: Record<string, unknown>): RunRecord {
+  const { sourceKind, sourceRef, ...rest } = raw as unknown as RunRecord & {
+    sourceKind?: string;
+    sourceRef?: string;
+  };
+  const tags: string[] = (rest.tags as string[]) ?? [];
+  return {
+    ...rest,
+    source: rest.source ?? (sourceKind || sourceRef ? { kind: sourceKind, ref: sourceRef } : undefined),
+    archivedAt:
+      rest.archivedAt ??
+      (tags.includes('archived') ? (((rest as Record<string, unknown>).updatedAt as string) ?? null) : null)
+  } as RunRecord;
 }
 
 export async function listPacks(demoMode: boolean): Promise<PackSummary[]> {
@@ -155,12 +172,30 @@ export async function runExample(
   });
 }
 
-export async function validateRun(body: Record<string, unknown>, demoMode: boolean) {
-  if (demoMode) return maybeDelay({ ok: true, warnings: [] });
-  return fetchJson('control-plane', '/runs/validate', {
+export async function validateRun(body: Record<string, unknown>, demoMode: boolean): Promise<ValidateRunResponse> {
+  if (demoMode) {
+    return maybeDelay({
+      ok: true,
+      errors: [],
+      warnings: [],
+      runtime: { reachable: true, supportedModes: ['negotiation'], capabilities: undefined }
+    });
+  }
+  const raw = await fetchJson<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    runtime: { reachable: boolean; supportedModes: string[]; capabilities?: unknown };
+  }>('control-plane', '/runs/validate', {
     method: 'POST',
     body: JSON.stringify(body)
   });
+  return {
+    ok: raw.valid && raw.errors.length === 0,
+    errors: raw.errors,
+    warnings: raw.warnings,
+    runtime: raw.runtime
+  };
 }
 
 export async function createRun(body: Record<string, unknown>, demoMode: boolean): Promise<CreateRunResponse> {
@@ -186,7 +221,8 @@ export async function listRuns(
     if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
   });
   const suffix = query.toString() ? `?${query.toString()}` : '';
-  return fetchJson<RunRecord[]>('control-plane', `/runs${suffix}`);
+  const res = await fetchJson<{ data: Record<string, unknown>[]; total: number }>('control-plane', `/runs${suffix}`);
+  return res.data.map(normalizeRun);
 }
 
 export async function getRun(runId: string, demoMode: boolean): Promise<RunRecord> {
@@ -195,7 +231,8 @@ export async function getRun(runId: string, demoMode: boolean): Promise<RunRecor
     if (!run) throw new Error(`Unknown mock run: ${runId}`);
     return maybeDelay(run);
   }
-  return fetchJson<RunRecord>('control-plane', `/runs/${runId}`);
+  const raw = await fetchJson<Record<string, unknown>>('control-plane', `/runs/${runId}`);
+  return normalizeRun(raw);
 }
 
 export async function getRunState(runId: string, demoMode: boolean): Promise<RunStateProjection> {
@@ -232,12 +269,16 @@ export async function getRunMessages(runId: string, demoMode: boolean): Promise<
   return fetchJson<Record<string, unknown>[]>('control-plane', `/runs/${runId}/messages`);
 }
 
-export async function cancelRun(runId: string, demoMode: boolean) {
+export async function cancelRun(
+  runId: string,
+  demoMode: boolean
+): Promise<{ ok: boolean; runId: string; status: string }> {
   if (demoMode) return maybeDelay({ ok: true, runId, status: 'cancelled' });
-  return fetchJson('control-plane', `/runs/${runId}/cancel`, {
+  const raw = await fetchJson<Record<string, unknown>>('control-plane', `/runs/${runId}/cancel`, {
     method: 'POST',
     body: JSON.stringify({ reason: 'Cancelled from MACP UI' })
   });
+  return { ok: true, runId: String(raw.id ?? runId), status: String(raw.status ?? 'cancelled') };
 }
 
 export async function cloneRun(runId: string, demoMode: boolean) {
@@ -248,9 +289,15 @@ export async function cloneRun(runId: string, demoMode: boolean) {
   });
 }
 
-export async function archiveRun(runId: string, demoMode: boolean) {
+export async function archiveRun(
+  runId: string,
+  demoMode: boolean
+): Promise<{ ok: boolean; runId: string; archived: boolean }> {
   if (demoMode) return maybeDelay({ ok: true, runId, archived: true });
-  return fetchJson('control-plane', `/runs/${runId}/archive`, { method: 'POST' });
+  const raw = await fetchJson<Record<string, unknown>>('control-plane', `/runs/${runId}/archive`, {
+    method: 'POST'
+  });
+  return { ok: true, runId: String(raw.id ?? runId), archived: true };
 }
 
 export async function createReplay(runId: string, demoMode: boolean): Promise<ReplayDescriptor> {
@@ -275,57 +322,19 @@ export async function compareRuns(
 
 export async function getAgentProfiles(demoMode: boolean): Promise<AgentProfile[]> {
   if (demoMode) return maybeDelay(MOCK_AGENT_PROFILES);
-  const packs = await listPacks(false);
-  const scenarios = await Promise.all(packs.map((pack) => listScenarios(pack.slug, false)));
-  const scenarioRows = packs.flatMap((pack, index) =>
-    scenarios[index].map((scenario) => ({ pack: pack.slug, scenario }))
-  );
-  const profiles = new Map<string, AgentProfile>();
-
-  for (const row of scenarioRows) {
-    const scenario = row.scenario;
-    const schema = await getLaunchSchema(
-      row.pack,
-      scenario.scenario,
-      scenario.versions[0],
-      scenario.templates[0],
-      false
-    );
-    schema.agents.forEach((agent) => {
-      const existing = profiles.get(agent.agentRef);
-      const scenarioRef = `${row.pack}/${scenario.scenario}@${scenario.versions[0]}`;
-      if (existing) {
-        existing.scenarios.push(scenarioRef);
-      } else {
-        profiles.set(agent.agentRef, {
-          agentRef: agent.agentRef,
-          name: agent.name,
-          role: agent.role,
-          framework: agent.framework,
-          description: agent.description,
-          transportIdentity: agent.transportIdentity,
-          entrypoint: agent.entrypoint,
-          bootstrapStrategy: agent.bootstrapStrategy,
-          bootstrapMode: agent.bootstrapMode,
-          tags: agent.tags,
-          scenarios: [scenarioRef],
-          metrics: {
-            runs: 0,
-            signals: 0,
-            averageLatencyMs: 0,
-            averageConfidence: 0
-          }
-        });
-      }
-    });
-  }
-
-  return [...profiles.values()];
+  return fetchJson<AgentProfile[]>('example', '/agents');
 }
 
 export async function getAgentProfile(agentRef: string, demoMode: boolean): Promise<AgentProfile | undefined> {
-  const agents = await getAgentProfiles(demoMode);
-  return agents.find((agent) => agent.agentRef === agentRef);
+  if (demoMode) {
+    const agents = await getAgentProfiles(true);
+    return agents.find((agent) => agent.agentRef === agentRef);
+  }
+  try {
+    return await fetchJson<AgentProfile>('example', `/agents/${encodeURIComponent(agentRef)}`);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function getRuntimeManifest(demoMode: boolean): Promise<RuntimeManifestResult> {
@@ -406,27 +415,57 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
     });
   }
 
-  const [runs, packs, runtimeHealth] = await Promise.all([listRuns(false), listPacks(false), getRuntimeHealth(false)]);
-  const totalRuns = runs.length;
-  const activeRuns = runs.filter((run) =>
-    ['queued', 'starting', 'binding_session', 'running'].includes(run.status)
-  ).length;
-  const successRate = totalRuns === 0 ? 0 : runs.filter((run) => run.status === 'completed').length / totalRuns;
-  const averageDurationMs = 0;
+  type CpOverview = {
+    kpis?: Record<string, number>;
+    charts?: Record<string, { labels: string[]; data: number[] }>;
+    recentRuns?: Record<string, unknown>[];
+    runtimeHealth?: { ok: boolean; runtimeKind: string; detail?: string };
+  };
+  const [cpOverview, runs, packs, runtimeHealth] = await Promise.all([
+    fetchJson<CpOverview>('control-plane', '/dashboard/overview').catch((): CpOverview => ({})),
+    listRuns(false, { limit: 20 }),
+    listPacks(false),
+    getRuntimeHealth(false)
+  ]);
+
+  const cpKpis = cpOverview.kpis ?? {};
+  const totalRuns = cpKpis.totalRuns ?? runs.length;
+  const activeRuns =
+    cpKpis.activeRuns ??
+    runs.filter((run) => ['queued', 'starting', 'binding_session', 'running'].includes(run.status)).length;
+  const successRate =
+    totalRuns === 0 ? 0 : (cpKpis.completedRuns ?? runs.filter((run) => run.status === 'completed').length) / totalRuns;
+  const averageDurationMs = cpKpis.avgDurationMs ?? 0;
+
+  const cpCharts = cpOverview.charts ?? {};
+  const toChartPoints = (chart?: { labels: string[]; data: number[] }): ChartPoint[] =>
+    chart ? chart.labels.map((label, i) => ({ label, value: chart.data[i] ?? 0 })) : [];
+
   return {
     kpis: {
       totalRuns,
       activeRuns,
       successRate,
       averageDurationMs,
-      totalSignals: 0,
+      totalSignals: cpKpis.totalSignals ?? 0,
       totalCostUsd: 0,
       totalTokens: 0
     },
     runs,
     packs,
-    runtimeHealth,
-    charts: { runVolume: [], latency: [], errors: [], signals: [] }
+    runtimeHealth: cpOverview.runtimeHealth
+      ? {
+          ok: cpOverview.runtimeHealth.ok,
+          runtimeKind: cpOverview.runtimeHealth.runtimeKind,
+          detail: cpOverview.runtimeHealth.detail
+        }
+      : runtimeHealth,
+    charts: {
+      runVolume: toChartPoints(cpCharts.runVolume),
+      latency: toChartPoints(cpCharts.latency),
+      errors: toChartPoints(cpCharts.errorClasses),
+      signals: toChartPoints(cpCharts.signalVolume)
+    }
   };
 }
 

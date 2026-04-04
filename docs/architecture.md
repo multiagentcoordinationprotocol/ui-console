@@ -43,6 +43,12 @@ Located in `lib/api/`.
 - `fetcher.ts` wraps proxy requests
 - `client.ts` exposes typed UI-facing functions
 - functions switch between demo-mode mocks and real proxy-backed requests
+- includes a response normalization layer (`normalizeRun()`) that reconciles backend response shapes with UI types:
+  - unwraps paginated responses
+  - nests flat `sourceKind`/`sourceRef` into `source: { kind, ref }`
+  - maps `valid` to `ok` for validation responses
+  - extracts envelopes from full run records for cancel/archive
+  - synthesizes `archivedAt` from archive tags
 
 ### 3. Demo-mode data layer
 

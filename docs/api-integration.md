@@ -56,6 +56,11 @@ authorization: Bearer <CONTROL_PLANE_API_KEY>
 - `GET /packs`
 - `GET /packs/:packSlug/scenarios`
 
+### Agent profiles
+
+- `GET /agents` — list all agent profiles with pre-computed metrics
+- `GET /agents/:agentRef` — single agent profile
+
 ### Launch setup
 
 - `GET /packs/:packSlug/scenarios/:scenarioSlug/versions/:version/launch-schema?template=`
@@ -67,6 +72,10 @@ authorization: Bearer <CONTROL_PLANE_API_KEY>
 
 ## Control Plane endpoints used by the UI
 
+### Dashboard
+
+- `GET /dashboard/overview` — aggregated KPIs and chart data (optional — UI falls back to client-side computation)
+
 ### Run lifecycle
 
 - `POST /runs/validate`
@@ -74,6 +83,8 @@ authorization: Bearer <CONTROL_PLANE_API_KEY>
 - `GET /runs`
 - `GET /runs/:id`
 - `POST /runs/:id/cancel`
+- `POST /runs/:id/clone`
+- `POST /runs/:id/archive`
 - `POST /runs/:id/replay`
 - `POST /runs/compare`
 
@@ -123,15 +134,32 @@ Highlights:
 - `validateRun`
 - `createRun`
 - `listRuns`
+- `getRun`
 - `getRunState`
 - `getRunEvents`
 - `getRunMetrics`
 - `getRunTraces`
 - `getRunArtifacts`
+- `cancelRun`
+- `cloneRun`
+- `archiveRun`
 - `compareRuns`
+- `getAgentProfiles`
+- `getAgentProfile`
 - `getRuntimeHealth`
+- `getDashboardOverview`
 - `getAuditLogs`
 - `getWebhooks`
+
+## Response normalization
+
+The API client includes a `normalizeRun()` helper that reconciles differences between the Control Plane's response format and the UI's `RunRecord` type:
+
+- **Pagination unwrapping**: `GET /runs` returns `{ data, total, limit, offset }`. The client unwraps `.data` to return a flat `RunRecord[]`.
+- **Source field nesting**: The Control Plane stores `sourceKind` and `sourceRef` as flat fields. The client maps them to `source: { kind, ref }`.
+- **Archived timestamp bridge**: The Control Plane archives runs via tags. The client synthesizes `archivedAt` from `tags.includes('archived')` until the Control Plane adds a dedicated column.
+- **Validate response mapping**: `POST /runs/validate` returns `{ valid, errors, warnings, runtime }`. The client maps `valid` to `ok` and composes a `ValidateRunResponse`.
+- **Cancel/archive envelope mapping**: `POST /runs/:id/cancel` and `POST /runs/:id/archive` return full `RunRecord` objects. The client extracts `{ ok, runId, status }` and `{ ok, runId, archived }` respectively.
 
 ## Demo mode
 
