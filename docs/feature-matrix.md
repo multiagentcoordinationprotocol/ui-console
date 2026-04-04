@@ -32,8 +32,8 @@
 | Compare | Decision comparison | ✅ | Side-by-side confidence bars and reasons |
 | Compare | Payload diff viewer | ✅ | Structural diff with color-coded changes |
 | Compare | Signal timeline overlay | ✅ | Dual-lane chronological signal view |
-| Agents | Agent catalog | ✅ | Search + framework filter |
-| Agents | Agent detail | ✅ | Scenario coverage + related runs |
+| Agents | Agent catalog | ✅ | Search + framework filter, direct Example Service `/agents` endpoint |
+| Agents | Agent detail | ✅ | Scenario coverage + related runs, direct `/agents/:agentRef` endpoint |
 | Logs | Canonical event explorer | ✅ | Run selection + event filters |
 | Traces | Trace summary and artifact explorer | ✅ | Inline span support when available |
 | Observability | Runtime health dashboard | ✅ | Manifest, modes, roots, metrics text |
@@ -45,6 +45,7 @@
 | Platform | Demo mode | ✅ | Rich mock dataset |
 | Platform | Command palette | ✅ | Route jumping |
 | Platform | Theme toggle | ✅ | Dark/light |
+| Platform | Real-mode integration | ✅ | Response normalization layer for CP/ES compatibility |
 | Platform | Server-side proxy BFF | ✅ | Secret-safe browser integration |
 | Platform | Error boundaries | ✅ | Global + per-component crash recovery |
 | Platform | CI/CD | ✅ | GitHub Actions: lint, typecheck, test, build |

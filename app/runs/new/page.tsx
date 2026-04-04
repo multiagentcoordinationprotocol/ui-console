@@ -147,7 +147,7 @@ function NewRunPageContent() {
     mutationFn: async () => {
       const compiled = compileResult ?? (await compileMutation.mutateAsync());
       const validation = await validateRun(compiled.executionRequest as unknown as Record<string, unknown>, demoMode);
-      setValidationResult(validation as Record<string, unknown>);
+      setValidationResult(validation as unknown as Record<string, unknown>);
       return validation;
     }
   });

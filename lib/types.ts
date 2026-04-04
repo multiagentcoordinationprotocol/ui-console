@@ -350,6 +350,17 @@ export interface AuditListResponse {
   total: number;
 }
 
+export interface ValidateRunResponse {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  runtime: {
+    reachable: boolean;
+    supportedModes: string[];
+    capabilities?: unknown;
+  };
+}
+
 export interface WebhookSubscription {
   id: string;
   url: string;

@@ -4,7 +4,11 @@ import { Providers } from '@/components/providers';
 
 export const metadata = {
   title: 'MACP Console',
-  description: 'Execution orchestration and observability console for MACP.'
+  description: 'Execution orchestration and observability console for MACP.',
+  icons: {
+    icon: '/logo-mark.svg',
+    apple: '/logo-mark.svg'
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

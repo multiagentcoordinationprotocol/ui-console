@@ -1,5 +1,40 @@
 # Changelog
 
+## Real-mode integration fixes
+
+### Changed
+
+#### Response normalization layer
+
+- added `normalizeRun()` helper in `lib/api/client.ts` that maps Control Plane response shapes to UI types
+- `listRuns()` now unwraps the paginated `{ data, total }` response from the Control Plane
+- `getRun()` now normalizes the raw response through `normalizeRun()`
+- flat `sourceKind`/`sourceRef` fields are mapped to nested `source: { kind, ref }` on all run records
+- `archivedAt` is synthesized from `tags.includes('archived')` as a bridge until the Control Plane adds a dedicated column
+
+#### Validate, cancel, and archive response mapping
+
+- `validateRun()` now maps the Control Plane's `{ valid, errors, warnings, runtime }` response to a typed `ValidateRunResponse` with `ok` field
+- `cancelRun()` now extracts `{ ok, runId, status }` from the full run record returned by the Control Plane
+- `archiveRun()` now extracts `{ ok, runId, archived }` from the full run record returned by the Control Plane
+
+#### Agent profiles via Example Service
+
+- `getAgentProfiles()` now calls Example Service `GET /agents` directly instead of computing profiles client-side via N+1 cascading calls to packs/scenarios/launch-schemas
+- `getAgentProfile()` now calls Example Service `GET /agents/:agentRef` directly with fallback to `undefined`
+
+#### Dashboard overview with Control Plane aggregation
+
+- `getDashboardOverview()` now fetches from Control Plane `GET /dashboard/overview` for KPIs and chart data
+- falls back gracefully to client-side computation if the endpoint is unavailable
+- Control Plane chart data (`{ labels, data }` arrays) is converted to UI `ChartPoint[]` format
+
+#### Types
+
+- added `ValidateRunResponse` interface to `lib/types.ts`
+
+---
+
 ## Initial MACP UI Console delivery
 
 ### Added
