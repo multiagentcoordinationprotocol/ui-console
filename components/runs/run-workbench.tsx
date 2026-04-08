@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Database, Download, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useConfirmation } from '@/lib/hooks/use-confirmation';
+import { useToast } from '@/components/ui/toast';
 import { ExecutionGraph } from '@/components/runs/execution-graph';
 import { LiveEventFeed } from '@/components/runs/live-event-feed';
 import { NodeInspector } from '@/components/runs/node-inspector';
@@ -54,6 +57,8 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
   const setShowParallelBranches = usePreferencesStore((state) => state.setShowParallelBranches);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const confirmation = useConfirmation();
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>();
   const [replayDescriptorJson, setReplayDescriptorJson] = useState<Record<string, unknown> | undefined>();
   const [replaySeq, setReplaySeq] = useState<number | undefined>();
@@ -130,18 +135,32 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
         queryClient.invalidateQueries({ queryKey: ['run', runId] }),
         queryClient.invalidateQueries({ queryKey: ['run-state', runId] })
       ]);
+      toast('success', 'Run cancelled.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to cancel run.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
   const replayMutation = useMutation({
     mutationFn: () => createReplay(runId, demoMode),
-    onSuccess: (data) => setReplayDescriptorJson(data as unknown as Record<string, unknown>)
+    onSuccess: (data) => {
+      setReplayDescriptorJson(data as unknown as Record<string, unknown>);
+      toast('success', 'Replay descriptor generated.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to create replay.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
   });
 
   const rebuildMutation = useMutation({
     mutationFn: () => rebuildProjection(runId, demoMode),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['run-state', runId] });
+      toast('success', 'Projection rebuilt.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to rebuild projection.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -149,7 +168,11 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
     mutationFn: () => deleteRun(runId, demoMode),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['runs'] });
+      toast('success', 'Run deleted.');
       router.push('/runs');
+    },
+    onError: (error) => {
+      toast('error', `Failed to delete run.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -170,7 +193,11 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
     },
     onSuccess: (data) => {
       setShowCloneForm(false);
+      toast('success', 'Run cloned successfully.');
       router.push(`/runs/live/${data.runId}`);
+    },
+    onError: (error) => {
+      toast('error', `Failed to clone run.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -340,7 +367,12 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
       <div className="split-layout">
         <div className="panel-stack">
           <DecisionPanel run={run} state={projectedState} />
-          {projectedState.policy && <PolicyPanel policy={projectedState.policy} />}
+          {projectedState.policy && (
+            <PolicyPanel
+              policy={projectedState.policy}
+              policyHints={run.metadata?.policyHints as import('@/lib/types').PolicyHints | undefined}
+            />
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Run observability summary</CardTitle>
@@ -424,7 +456,19 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
                   {rebuildMutation.isPending ? 'Rebuilding...' : 'Rebuild projection'}
                 </Button>
                 {['completed', 'failed', 'cancelled'].includes(run.status) && (
-                  <Button variant="danger" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+                  <Button
+                    variant="danger"
+                    onClick={async () => {
+                      const confirmed = await confirmation.confirm({
+                        title: 'Delete run permanently',
+                        description: `Permanently delete run ${runId.slice(0, 8)}...? This action cannot be undone.`,
+                        confirmLabel: 'Delete'
+                      });
+                      if (confirmed) deleteMutation.mutate();
+                    }}
+                    disabled={deleteMutation.isPending}
+                    aria-label="Permanently delete this run"
+                  >
                     <Trash2 size={16} />
                     {deleteMutation.isPending ? 'Deleting...' : 'Permanent delete'}
                   </Button>
@@ -528,6 +572,15 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
           </Card>
         </div>
       </div>
+      <ConfirmationDialog
+        open={confirmation.state.open}
+        title={confirmation.state.title}
+        description={confirmation.state.description}
+        confirmLabel={confirmation.state.confirmLabel}
+        variant={confirmation.state.variant}
+        onConfirm={confirmation.state.onConfirm}
+        onCancel={confirmation.cancel}
+      />
     </div>
   );
 }

@@ -50,7 +50,7 @@ const RunGraphNode = memo(function RunGraphNode({ data }: NodeProps<Node<FlowNod
           ? {
               borderLeftWidth: 3,
               borderLeftStyle: 'solid',
-              borderLeftColor: data.outcomePositive ? 'var(--color-success)' : 'var(--color-danger)'
+              borderLeftColor: data.outcomePositive ? 'var(--success)' : 'var(--danger)'
             }
           : undefined
       }

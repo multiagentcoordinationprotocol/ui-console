@@ -52,13 +52,25 @@ export default function ObservabilityPage() {
     );
   }
   if (overviewQuery.error || healthQuery.error || !overviewQuery.data || !healthQuery.data) {
-    return (
-      <ErrorPanel
-        message={String(overviewQuery.error ?? healthQuery.error ?? 'Observability data is unavailable.')}
-        actionHref="/"
-      />
-    );
+    const errors = [
+      overviewQuery.error ? `Overview: ${String(overviewQuery.error)}` : '',
+      healthQuery.error ? `Health: ${String(healthQuery.error)}` : '',
+      !overviewQuery.data && !overviewQuery.error ? 'Overview data is unavailable.' : '',
+      !healthQuery.data && !healthQuery.error ? 'Health data is unavailable.' : ''
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return <ErrorPanel message={errors} actionHref="/" />;
   }
+
+  const subsidiaryErrors = [
+    manifestQuery.error ? 'Manifest' : '',
+    modesQuery.error ? 'Modes' : '',
+    rootsQuery.error ? 'Roots' : '',
+    metricsTextQuery.error ? 'Metrics' : '',
+    auditQuery.error ? 'Audit' : '',
+    readinessQuery.error ? 'Readiness' : ''
+  ].filter(Boolean);
 
   const { charts, kpis } = overviewQuery.data;
   const health = healthQuery.data;
@@ -74,6 +86,17 @@ export default function ObservabilityPage() {
           </p>
         </div>
       </div>
+
+      {subsidiaryErrors.length > 0 && (
+        <div className="empty-state compact" style={{ borderColor: 'var(--warning)' }}>
+          <h4 style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <AlertTriangle size={16} /> Partial data load
+          </h4>
+          <p>
+            Some data sources failed to load: {subsidiaryErrors.join(', ')}. The page may show incomplete information.
+          </p>
+        </div>
+      )}
 
       <div className="grid-4">
         <Card>

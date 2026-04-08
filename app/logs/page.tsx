@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/field';
+import { JsonViewer } from '@/components/ui/json-viewer';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
 import { getLogsData, listRuns } from '@/lib/api/client';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
@@ -27,6 +29,17 @@ export default function LogsPage() {
   const [runId, setRunId] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const toggleExpand = useCallback((id: string) => setExpandedEventId((prev) => (prev === id ? null : id)), []);
+  const handleRowKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleExpand(id);
+      }
+    },
+    [toggleExpand]
+  );
   const runsQuery = useQuery({ queryKey: ['log-runs', demoMode], queryFn: () => listRuns(demoMode) });
   const effectiveRunId = runId || runsQuery.data?.[0]?.id || '';
 
@@ -161,6 +174,7 @@ export default function LogsPage() {
         <table className="table">
           <thead>
             <tr>
+              <th style={{ width: 28 }}></th>
               <th>Seq</th>
               <th>Timestamp</th>
               <th>Type</th>
@@ -170,18 +184,33 @@ export default function LogsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((event) => (
-              <tr key={event.id}>
-                <td>
-                  <Badge label={String(event.seq)} />
-                </td>
-                <td>{formatDateTime(event.ts)}</td>
-                <td>{event.type}</td>
-                <td>{event.subject ? `${event.subject.kind}:${event.subject.id}` : '—'}</td>
-                <td>{event.source.name}</td>
-                <td>{truncate(JSON.stringify(event.data), 180)}</td>
-              </tr>
-            ))}
+            {filtered.map((event) => {
+              const isExpanded = expandedEventId === event.id;
+              return (
+                <tr
+                  key={event.id}
+                  className="expandable-row"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  aria-label={`Event ${event.seq}: ${event.type}. Press Enter to ${isExpanded ? 'collapse' : 'expand'} payload.`}
+                  onClick={() => toggleExpand(event.id)}
+                  onKeyDown={(e) => handleRowKeyDown(e, event.id)}
+                >
+                  <td style={{ color: 'var(--muted)' }}>
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </td>
+                  <td>
+                    <Badge label={String(event.seq)} />
+                  </td>
+                  <td>{formatDateTime(event.ts)}</td>
+                  <td>{event.type}</td>
+                  <td>{event.subject ? `${event.subject.kind}:${event.subject.id}` : '—'}</td>
+                  <td>{event.source.name}</td>
+                  <td>{isExpanded ? <JsonViewer value={event.data} /> : truncate(JSON.stringify(event.data), 180)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

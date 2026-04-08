@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useConfirmation } from '@/lib/hooks/use-confirmation';
+import { useToast } from '@/components/ui/toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -18,6 +21,8 @@ interface PolicyManagementProps {
 
 export function PolicyManagement({ demoMode }: PolicyManagementProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const confirmation = useConfirmation();
   const [modeFilter, setModeFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -31,6 +36,10 @@ export function PolicyManagement({ demoMode }: PolicyManagementProps) {
     mutationFn: (policyId: string) => unregisterRuntimePolicy(policyId, demoMode),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['runtime-policies'] });
+      toast('success', 'Policy unregistered.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to unregister policy.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -43,7 +52,7 @@ export function PolicyManagement({ demoMode }: PolicyManagementProps) {
         <CardDescription>Manage governance policies registered with the control plane runtime.</CardDescription>
       </CardHeader>
       <CardContent className="stack">
-        <div className="form-row" style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div className="form-row">
           <div>
             <FieldLabel>Filter by mode</FieldLabel>
             <Input
@@ -90,11 +99,17 @@ export function PolicyManagement({ demoMode }: PolicyManagementProps) {
               <div className="section-actions">
                 <Button
                   variant="danger"
-                  onClick={() => {
+                  onClick={async () => {
                     if (policy.policyId === 'policy.default') return;
-                    deleteMutation.mutate(policy.policyId);
+                    const confirmed = await confirmation.confirm({
+                      title: 'Unregister policy',
+                      description: `Unregister policy "${policy.policyId}"? This cannot be undone.`,
+                      confirmLabel: 'Unregister'
+                    });
+                    if (confirmed) deleteMutation.mutate(policy.policyId);
                   }}
                   disabled={deleteMutation.isPending || policy.policyId === 'policy.default'}
+                  aria-label={`Unregister policy ${policy.policyId}`}
                 >
                   <Trash2 size={14} />
                   Delete
@@ -110,12 +125,22 @@ export function PolicyManagement({ demoMode }: PolicyManagementProps) {
           )}
         </div>
       </CardContent>
+      <ConfirmationDialog
+        open={confirmation.state.open}
+        title={confirmation.state.title}
+        description={confirmation.state.description}
+        confirmLabel={confirmation.state.confirmLabel}
+        variant={confirmation.state.variant}
+        onConfirm={confirmation.state.onConfirm}
+        onCancel={confirmation.cancel}
+      />
     </Card>
   );
 }
 
 function RegisterPolicyForm({ demoMode, onSuccess }: { demoMode: boolean; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [policyId, setPolicyId] = useState('');
   const [mode, setMode] = useState('macp.mode.decision.v1');
   const [description, setDescription] = useState('');
@@ -147,7 +172,11 @@ function RegisterPolicyForm({ demoMode, onSuccess }: { demoMode: boolean; onSucc
       setPolicyId('');
       setDescription('');
       setRulesJson('{}');
+      toast('success', 'Policy registered successfully.');
       onSuccess();
+    },
+    onError: (error) => {
+      toast('error', `Registration failed.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -177,51 +206,49 @@ function RegisterPolicyForm({ demoMode, onSuccess }: { demoMode: boolean; onSucc
   }
 
   return (
-    <form
-      className="stack"
-      onSubmit={handleSubmit}
-      style={{ padding: '12px 0', borderTop: '1px solid var(--color-border)' }}
-    >
-      <div className="grid-2">
-        <div>
-          <FieldLabel>Policy ID</FieldLabel>
-          <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="policy.my-custom" />
+    <form className="stack" onSubmit={handleSubmit} style={{ padding: '12px 0', borderTop: `1px solid var(--border)` }}>
+      <fieldset disabled={registerMutation.isPending} style={{ border: 'none', padding: 0, margin: 0 }}>
+        <div className="grid-2">
+          <div>
+            <FieldLabel>Policy ID</FieldLabel>
+            <Input value={policyId} onChange={(e) => setPolicyId(e.target.value)} placeholder="policy.my-custom" />
+          </div>
+          <div>
+            <FieldLabel>Target mode</FieldLabel>
+            <Select value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="macp.mode.decision.v1">macp.mode.decision.v1</option>
+              <option value="macp.mode.quorum.v1">macp.mode.quorum.v1</option>
+            </Select>
+          </div>
+        </div>
+        <div className="grid-2">
+          <div>
+            <FieldLabel>Description</FieldLabel>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe the policy..."
+            />
+          </div>
+          <div>
+            <FieldLabel>Schema version</FieldLabel>
+            <Input type="number" value={schemaVersion} onChange={(e) => setSchemaVersion(e.target.value)} min="1" />
+          </div>
         </div>
         <div>
-          <FieldLabel>Target mode</FieldLabel>
-          <Select value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="macp.mode.decision.v1">macp.mode.decision.v1</option>
-            <option value="macp.mode.quorum.v1">macp.mode.quorum.v1</option>
-          </Select>
+          <FieldLabel>Rules (JSON)</FieldLabel>
+          <Textarea value={rulesJson} onChange={(e) => setRulesJson(e.target.value)} rows={4} />
         </div>
-      </div>
-      <div className="grid-2">
-        <div>
-          <FieldLabel>Description</FieldLabel>
-          <Input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe the policy..."
-          />
-        </div>
-        <div>
-          <FieldLabel>Schema version</FieldLabel>
-          <Input type="number" value={schemaVersion} onChange={(e) => setSchemaVersion(e.target.value)} min="1" />
-        </div>
-      </div>
-      <div>
-        <FieldLabel>Rules (JSON)</FieldLabel>
-        <Textarea value={rulesJson} onChange={(e) => setRulesJson(e.target.value)} rows={4} />
-      </div>
-      {validationError && <div className="error-text">{validationError}</div>}
-      {registerMutation.isError && (
-        <div className="error-text">
-          Registration failed.{registerMutation.error instanceof Error ? ` ${registerMutation.error.message}` : ''}
-        </div>
-      )}
-      <Button type="submit" disabled={registerMutation.isPending}>
-        {registerMutation.isPending ? 'Registering...' : 'Register policy'}
-      </Button>
+        {validationError && <div className="error-text">{validationError}</div>}
+        {registerMutation.isError && (
+          <div className="error-text">
+            Registration failed.{registerMutation.error instanceof Error ? ` ${registerMutation.error.message}` : ''}
+          </div>
+        )}
+        <Button type="submit" disabled={registerMutation.isPending}>
+          {registerMutation.isPending ? 'Registering...' : 'Register policy'}
+        </Button>
+      </fieldset>
     </form>
   );
 }

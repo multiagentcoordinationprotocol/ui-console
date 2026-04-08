@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Eye, Play } from 'lucide-react';
-import { RunsTable } from '@/components/runs/runs-table';
+import { Eye, Play } from 'lucide-react';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
@@ -97,7 +96,6 @@ export default function LiveRunsPage() {
               );
             })}
           </div>
-          <RunsTable runs={activeRuns} showCompare={false} />
         </>
       )}
     </div>

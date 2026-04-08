@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, Input, Textarea, FieldLabel } from '@/components/ui/field';
 import { sendRunMessage, sendRunSignal } from '@/lib/api/client';
+import { useToast } from '@/components/ui/toast';
 import type { RunStateProjection } from '@/lib/types';
+import { safeParseJson } from '@/lib/utils/json';
 
 interface SessionInteractionPanelProps {
   runId: string;
@@ -17,7 +19,8 @@ interface SessionInteractionPanelProps {
 
 export function SessionInteractionPanel({ runId, demoMode, state }: SessionInteractionPanelProps) {
   const [tab, setTab] = useState<'message' | 'signal'>('message');
-  const participants = state.participants.map((p) => p.participantId);
+  const participants = state.participants.filter((p) => p.status === 'active').map((p) => p.participantId);
+  const allParticipants = state.participants.map((p) => p.participantId);
 
   return (
     <Card>
@@ -36,10 +39,16 @@ export function SessionInteractionPanel({ runId, demoMode, state }: SessionInter
             Signal
           </Button>
         </div>
+        {participants.length === 0 && (
+          <div className="empty-state compact">
+            <h4>No active participants</h4>
+            <p>Waiting for participants to join the session.</p>
+          </div>
+        )}
         {tab === 'message' ? (
-          <SendMessageForm runId={runId} demoMode={demoMode} participants={participants} />
+          <SendMessageForm runId={runId} demoMode={demoMode} participants={allParticipants} />
         ) : (
-          <SendSignalForm runId={runId} demoMode={demoMode} participants={participants} />
+          <SendSignalForm runId={runId} demoMode={demoMode} participants={allParticipants} />
         )}
       </CardContent>
     </Card>
@@ -55,6 +64,7 @@ function SendMessageForm({
   demoMode: boolean;
   participants: string[];
 }) {
+  const { toast } = useToast();
   const [from, setFrom] = useState(participants[0] ?? '');
   const [to, setTo] = useState('');
   const [messageType, setMessageType] = useState('Signal');
@@ -76,6 +86,10 @@ function SendMessageForm({
       setTo('');
       setMessageType('Signal');
       setPayload('{}');
+      toast('success', 'Message sent successfully.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to send message.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -134,6 +148,7 @@ function SendSignalForm({
   demoMode: boolean;
   participants: string[];
 }) {
+  const { toast } = useToast();
   const [from, setFrom] = useState(participants[0] ?? '');
   const [to, setTo] = useState(participants.join(', '));
   const [messageType, setMessageType] = useState('Signal');
@@ -167,6 +182,10 @@ function SendSignalForm({
       setSeverity('medium');
       setMessageType('Signal');
       setPayload('{}');
+      toast('success', 'Signal sent successfully.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to send signal.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -230,12 +249,4 @@ function SendSignalForm({
       )}
     </form>
   );
-}
-
-function safeParseJson(str: string): Record<string, unknown> {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return {};
-  }
 }

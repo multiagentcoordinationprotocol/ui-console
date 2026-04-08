@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, RotateCcw, Trash2, Webhook } from 'lucide-react';
+import { Pause, Play, RotateCcw, Trash2, Webhook } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useConfirmation } from '@/lib/hooks/use-confirmation';
+import { useToast } from '@/components/ui/toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -51,6 +54,8 @@ export default function SettingsPage() {
   const auditLimit = 10;
 
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const confirmation = useConfirmation();
   const webhooksQuery = useQuery({ queryKey: ['settings-webhooks', demoMode], queryFn: () => getWebhooks(demoMode) });
   const auditQuery = useQuery({
     queryKey: [
@@ -93,6 +98,10 @@ export default function SettingsPage() {
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
+      toast('success', 'Webhook created successfully.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to create webhook.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -100,17 +109,33 @@ export default function SettingsPage() {
     mutationFn: (id: string) => deleteWebhook(id, demoMode),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
+      toast('success', 'Webhook removed.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to remove webhook.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
   const toggleWebhookMutation = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) => updateWebhook(id, { active }, demoMode),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
+      toast('success', `Webhook ${variables.active ? 'resumed' : 'paused'}.`);
+    },
+    onError: (error) => {
+      toast('error', `Failed to update webhook.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
-  const resetBreakerMutation = useMutation({ mutationFn: () => resetCircuitBreaker(demoMode) });
+  const resetBreakerMutation = useMutation({
+    mutationFn: () => resetCircuitBreaker(demoMode),
+    onSuccess: () => {
+      toast('success', 'Circuit breaker reset.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to reset circuit breaker.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
+  });
 
   const preferencePayload = useMemo(
     () => ({ theme, demoMode, autoFollow, showCriticalPath, showParallelBranches, replaySpeed, logsDensity }),
@@ -126,14 +151,15 @@ export default function SettingsPage() {
     );
   }
   if (webhooksQuery.error || auditQuery.error || healthQuery.error || !healthQuery.data) {
-    return (
-      <ErrorPanel
-        message={String(
-          webhooksQuery.error ?? auditQuery.error ?? healthQuery.error ?? 'Settings data is unavailable.'
-        )}
-        actionHref="/"
-      />
-    );
+    const errors = [
+      webhooksQuery.error ? `Webhooks: ${String(webhooksQuery.error)}` : '',
+      auditQuery.error ? `Audit: ${String(auditQuery.error)}` : '',
+      healthQuery.error ? `Health: ${String(healthQuery.error)}` : '',
+      !healthQuery.data && !healthQuery.error ? 'Runtime health data is unavailable.' : ''
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return <ErrorPanel message={errors} actionHref="/" />;
   }
 
   return (
@@ -323,17 +349,26 @@ export default function SettingsPage() {
                   </div>
                   <div className="section-actions">
                     <Button
-                      variant="ghost"
+                      variant="secondary"
                       onClick={() => toggleWebhookMutation.mutate({ id: webhook.id, active: !webhook.active })}
                       disabled={toggleWebhookMutation.isPending}
+                      aria-label={webhook.active ? `Pause webhook ${webhook.url}` : `Resume webhook ${webhook.url}`}
                     >
-                      <Pencil size={14} />
+                      {webhook.active ? <Pause size={14} /> : <Play size={14} />}
                       {webhook.active ? 'Pause' : 'Resume'}
                     </Button>
                     <Button
                       variant="danger"
-                      onClick={() => deleteWebhookMutation.mutate(webhook.id)}
+                      onClick={async () => {
+                        const confirmed = await confirmation.confirm({
+                          title: 'Remove webhook',
+                          description: `Remove the subscription to ${webhook.url}? This cannot be undone.`,
+                          confirmLabel: 'Remove'
+                        });
+                        if (confirmed) deleteWebhookMutation.mutate(webhook.id);
+                      }}
                       disabled={deleteWebhookMutation.isPending}
+                      aria-label={`Remove webhook ${webhook.url}`}
                     >
                       <Trash2 size={16} />
                       Remove
@@ -475,6 +510,15 @@ export default function SettingsPage() {
         </Card>
       </div>
       <PolicyManagement demoMode={demoMode} />
+      <ConfirmationDialog
+        open={confirmation.state.open}
+        title={confirmation.state.title}
+        description={confirmation.state.description}
+        confirmLabel={confirmation.state.confirmLabel}
+        variant={confirmation.state.variant}
+        onConfirm={confirmation.state.onConfirm}
+        onCancel={confirmation.cancel}
+      />
     </div>
   );
 }

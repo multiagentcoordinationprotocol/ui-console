@@ -114,7 +114,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="kpi-card">
             <div className="kpi-label">Completed</div>
-            <div className="kpi-value" style={{ color: 'var(--color-success)' }}>
+            <div className="kpi-value" style={{ color: 'var(--success)' }}>
               {formatNumber(kpis.completedRuns)}
             </div>
             <div className="kpi-meta">Successfully resolved runs</div>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="kpi-card">
             <div className="kpi-label">Failed</div>
-            <div className="kpi-value" style={{ color: 'var(--color-danger)' }}>
+            <div className="kpi-value" style={{ color: 'var(--danger)' }}>
               {formatNumber(kpis.failedRuns)}
             </div>
             <div className="kpi-meta">Runs that encountered errors</div>
@@ -132,7 +132,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="kpi-card">
             <div className="kpi-label">Cancelled</div>
-            <div className="kpi-value" style={{ color: 'var(--color-warning)' }}>
+            <div className="kpi-value" style={{ color: 'var(--warning)' }}>
               {formatNumber(kpis.cancelledRuns)}
             </div>
             <div className="kpi-meta">Manually or automatically cancelled</div>

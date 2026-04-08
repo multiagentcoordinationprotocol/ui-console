@@ -50,7 +50,7 @@ export function DecisionPanel({ run, state }: { run: RunRecord; state: RunStateP
               ) : current?.outcomePositive === false ? (
                 <Badge label="Negative outcome" tone="danger" />
               ) : (
-                <Badge label="Pending" tone="neutral" />
+                <Badge label="Awaiting decision" tone="warning" />
               )}
             </div>
           </div>
