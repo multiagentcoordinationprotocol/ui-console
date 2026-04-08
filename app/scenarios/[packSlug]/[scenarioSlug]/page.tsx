@@ -108,27 +108,43 @@ function ScenarioDetailContent() {
           <CardTitle>Scenario switches</CardTitle>
           <CardDescription>Swap between versions and templates before moving to run creation.</CardDescription>
         </CardHeader>
-        <CardContent className="field-grid">
-          <div>
-            <label className="field-label">Version</label>
-            <Select value={version} onChange={(event) => setVersion(event.target.value)}>
-              {scenario.versions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </Select>
+        <CardContent className="stack">
+          <div className="field-grid">
+            <div>
+              <label className="field-label">Version</label>
+              <Select value={version} onChange={(event) => setVersion(event.target.value)}>
+                {scenario.versions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="field-label">Template</label>
+              <Select value={template} onChange={(event) => setTemplate(event.target.value)}>
+                {scenario.templates.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
-          <div>
-            <label className="field-label">Template</label>
-            <Select value={template} onChange={(event) => setTemplate(event.target.value)}>
-              {scenario.templates.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
+          {scenario.templates.length > 1 && (
+            <div className="inline-list">
+              {scenario.templates.map((tmpl) => (
+                <button
+                  key={tmpl}
+                  className={`badge ${tmpl === template ? 'badge-info' : 'badge-neutral'}`}
+                  style={{ cursor: 'pointer', border: 'none' }}
+                  onClick={() => setTemplate(tmpl)}
+                >
+                  {tmpl}
+                </button>
               ))}
-            </Select>
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

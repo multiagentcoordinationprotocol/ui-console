@@ -17,7 +17,7 @@ import { TimelineScrubber } from '@/components/runs/timeline-scrubber';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { FieldLabel, Input, Textarea } from '@/components/ui/field';
+import { FieldLabel, Input, Select, Textarea } from '@/components/ui/field';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
@@ -60,6 +60,11 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
   const [showCloneForm, setShowCloneForm] = useState(false);
   const [cloneTagsText, setCloneTagsText] = useState('');
   const [cloneContextText, setCloneContextText] = useState('{}');
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [exportIncludeCanonical, setExportIncludeCanonical] = useState(true);
+  const [exportIncludeRaw, setExportIncludeRaw] = useState(false);
+  const [exportEventLimit, setExportEventLimit] = useState(10000);
+  const [exportFormat, setExportFormat] = useState<'json' | 'jsonl'>('json');
 
   const runQuery = useQuery({ queryKey: ['run', runId, demoMode], queryFn: () => getRun(runId, demoMode) });
   const stateQuery = useQuery({
@@ -171,12 +176,26 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
 
   const exportMutation = useMutation({
     mutationFn: async () => {
-      const bundle = await exportRunBundle(runId, demoMode);
-      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const bundle = await exportRunBundle(runId, demoMode, {
+        includeCanonical: exportIncludeCanonical,
+        includeRaw: exportIncludeRaw,
+        eventLimit: exportEventLimit,
+        format: exportFormat
+      });
+      const ts = bundle.exportedAt ? new Date(bundle.exportedAt).toISOString().replace(/[:.]/g, '-') : 'now';
+      const ext = exportFormat === 'jsonl' ? 'jsonl' : 'json';
+      const content =
+        exportFormat === 'jsonl'
+          ? [bundle.run, ...(bundle.canonicalEvents ?? []), ...(bundle.rawEvents ?? [])]
+              .map((item) => JSON.stringify(item))
+              .join('\n')
+          : JSON.stringify(bundle, null, 2);
+      const mimeType = exportFormat === 'jsonl' ? 'application/x-ndjson' : 'application/json';
+      const blob = new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `run-${runId.slice(0, 8)}-bundle.json`;
+      a.download = `run-${runId.slice(0, 8)}-${ts}.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -392,9 +411,9 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
                   <RefreshCw size={16} />
                   {replayMutation.isPending ? 'Preparing replay...' : 'Request replay descriptor'}
                 </Button>
-                <Button variant="secondary" onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
+                <Button variant="secondary" onClick={() => setShowExportOptions(!showExportOptions)}>
                   <Download size={16} />
-                  {exportMutation.isPending ? 'Exporting...' : 'Download bundle'}
+                  Export bundle
                 </Button>
                 <Button
                   variant="secondary"
@@ -418,6 +437,60 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
                   Open run history
                 </Link>
               </div>
+              {showExportOptions && (
+                <Card>
+                  <CardContent className="stack" style={{ padding: '1rem' }}>
+                    <div className="field-grid">
+                      <label className="switch-row">
+                        <input
+                          type="checkbox"
+                          checked={exportIncludeCanonical}
+                          onChange={(e) => setExportIncludeCanonical(e.target.checked)}
+                        />
+                        <span>Include canonical events</span>
+                      </label>
+                      <label className="switch-row">
+                        <input
+                          type="checkbox"
+                          checked={exportIncludeRaw}
+                          onChange={(e) => setExportIncludeRaw(e.target.checked)}
+                        />
+                        <span>Include raw events</span>
+                      </label>
+                    </div>
+                    <div className="field-grid">
+                      <div>
+                        <FieldLabel>Event limit</FieldLabel>
+                        <Input
+                          type="number"
+                          value={String(exportEventLimit)}
+                          min={1}
+                          max={50000}
+                          onChange={(e) => setExportEventLimit(Number(e.target.value) || 10000)}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Format</FieldLabel>
+                        <Select
+                          value={exportFormat}
+                          onChange={(e) => setExportFormat(e.target.value as 'json' | 'jsonl')}
+                        >
+                          <option value="json">JSON</option>
+                          <option value="jsonl">JSONL (newline-delimited)</option>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button
+                      variant="primary"
+                      onClick={() => exportMutation.mutate()}
+                      disabled={exportMutation.isPending}
+                    >
+                      <Download size={16} />
+                      {exportMutation.isPending ? 'Exporting...' : 'Download'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
               {showCloneForm && (
                 <Card>
                   <CardContent className="stack" style={{ padding: '1rem' }}>

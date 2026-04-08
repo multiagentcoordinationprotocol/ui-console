@@ -172,8 +172,11 @@ export async function runExample(
   demoMode: boolean
 ): Promise<RunExampleResult> {
   if (demoMode) {
+    const compiled = await compileLaunch(input, true);
+    const policyVersion = compiled.executionRequest.session.policyVersion ?? 'policy.default';
+    const isNonDefault = policyVersion !== 'policy.default';
     return maybeDelay({
-      compiled: await compileLaunch(input, true),
+      compiled,
       hostedAgents: MOCK_LAUNCH_SCHEMAS['fraud/high-value-new-device@1.0.0:default'].agents.map((agent) => ({
         ...agent,
         participantId: agent.agentRef,
@@ -186,8 +189,8 @@ export async function runExample(
         runId: LIVE_RUN_ID,
         status: 'running',
         traceId: 'trace-live-fraud-001',
-        policyRegistered: true,
-        policyVersion: 'policy.default'
+        policyRegistered: isNonDefault,
+        policyVersion
       }
     });
   }
@@ -666,11 +669,12 @@ export async function exportRunBundle(
     const run = MOCK_RUNS.find((r) => r.id === runId) ?? MOCK_RUNS[0];
     return maybeDelay({
       run,
-      projection: MOCK_RUN_STATES[runId],
+      session: null,
+      projection: MOCK_RUN_STATES[runId] ?? null,
       canonicalEvents: MOCK_RUN_EVENTS[runId] ?? [],
       rawEvents: [],
       artifacts: MOCK_RUN_ARTIFACTS[runId] ?? [],
-      metrics: MOCK_RUN_METRICS[runId],
+      metrics: MOCK_RUN_METRICS[runId] ?? null,
       exportedAt: new Date().toISOString()
     });
   }
@@ -794,15 +798,16 @@ export async function getAgentMetrics(demoMode: boolean): Promise<AgentMetricsEn
 
 export async function batchExportRuns(runIds: string[], demoMode: boolean): Promise<RunExportBundle[]> {
   if (demoMode) {
-    const bundles = runIds.map((id) => {
+    const bundles: RunExportBundle[] = runIds.map((id) => {
       const run = MOCK_RUNS.find((r) => r.id === id) ?? MOCK_RUNS[0];
       return {
         run,
-        projection: MOCK_RUN_STATES[id],
+        session: null,
+        projection: MOCK_RUN_STATES[id] ?? null,
         canonicalEvents: MOCK_RUN_EVENTS[id] ?? [],
-        rawEvents: [] as Record<string, unknown>[],
+        rawEvents: [],
         artifacts: MOCK_RUN_ARTIFACTS[id] ?? [],
-        metrics: MOCK_RUN_METRICS[id],
+        metrics: MOCK_RUN_METRICS[id] ?? null,
         exportedAt: new Date().toISOString()
       };
     });

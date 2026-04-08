@@ -536,12 +536,12 @@ export interface SendSignalRequest {
 
 export interface RunExportBundle {
   run: RunRecord;
-  session?: Record<string, unknown>;
-  projection?: RunStateProjection;
-  canonicalEvents?: CanonicalEvent[];
-  rawEvents?: Record<string, unknown>[];
+  session: Record<string, unknown> | null;
+  projection: RunStateProjection | null;
+  canonicalEvents: CanonicalEvent[] | null;
+  rawEvents: Record<string, unknown>[] | null;
   artifacts: Artifact[];
-  metrics?: MetricsSummary;
+  metrics: MetricsSummary | null;
   exportedAt: string;
 }
 

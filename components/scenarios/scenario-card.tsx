@@ -19,6 +19,14 @@ export function ScenarioCard({ packSlug, scenario }: { packSlug: string; scenari
             <Badge key={tag} label={tag} />
           ))}
         </div>
+        {scenario.templates.length > 1 && (
+          <div className="inline-list">
+            <span className="muted small">Templates:</span>
+            {scenario.templates.map((tmpl) => (
+              <Badge key={tmpl} label={tmpl} tone={tmpl === 'default' ? 'neutral' : 'info'} />
+            ))}
+          </div>
+        )}
         <div className="metric-strip">
           <div className="metric-box">
             <div className="muted small">Versions</div>

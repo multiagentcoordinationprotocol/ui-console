@@ -10,6 +10,18 @@ import { getLogsData, listRuns } from '@/lib/api/client';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 import { formatDateTime, truncate } from '@/lib/utils/format';
 
+const EVENT_TYPE_GROUPS: Record<string, string[]> = {
+  Run: ['run.created', 'run.started', 'run.completed', 'run.failed', 'run.cancelled'],
+  Session: ['session.opened', 'session.resolved', 'session.expired'],
+  Participant: ['participant.joined', 'participant.left', 'participant.progress'],
+  Message: ['message.sent', 'message.received', 'message.send_failed'],
+  Signal: ['signal.emitted', 'signal.acknowledged'],
+  Proposal: ['proposal.submitted', 'proposal.accepted', 'proposal.rejected'],
+  Decision: ['decision.proposed', 'decision.finalized'],
+  Policy: ['policy.resolved', 'policy.commitment.evaluated', 'policy.denied'],
+  Tool: ['tool.call.started', 'tool.call.completed']
+};
+
 export default function LogsPage() {
   const demoMode = usePreferencesStore((state) => state.demoMode);
   const [runId, setRunId] = useState('');
@@ -24,10 +36,12 @@ export default function LogsPage() {
     enabled: demoMode || Boolean(effectiveRunId)
   });
 
-  const eventTypes = useMemo(
-    () => ['all', ...new Set((logsQuery.data ?? []).map((event) => event.type))],
-    [logsQuery.data]
-  );
+  const eventTypes = useMemo(() => {
+    const dynamicTypes = new Set((logsQuery.data ?? []).map((event) => event.type));
+    const staticTypes = Object.values(EVENT_TYPE_GROUPS).flat();
+    const allTypes = new Set([...staticTypes, ...dynamicTypes]);
+    return ['all', ...allTypes];
+  }, [logsQuery.data]);
 
   const filtered = useMemo(() => {
     const lower = search.toLowerCase();
@@ -87,11 +101,23 @@ export default function LogsPage() {
           <div>
             <label className="field-label">Event type</label>
             <Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              {eventTypes.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
+              <option value="all">all</option>
+              {Object.entries(EVENT_TYPE_GROUPS).map(([group, types]) => (
+                <optgroup key={group} label={group}>
+                  {types.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
+              {eventTypes
+                .filter((t) => t !== 'all' && !Object.values(EVENT_TYPE_GROUPS).flat().includes(t))
+                .map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
             </Select>
           </div>
           <div>

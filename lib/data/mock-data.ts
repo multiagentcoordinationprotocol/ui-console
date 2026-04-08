@@ -1110,6 +1110,26 @@ export const MOCK_RUN_EVENTS: Record<string, CanonicalEvent[]> = {
       subject: { kind: 'decision', id: 'incident-ops-004' },
       source: { kind: 'runtime', name: 'macp-runtime' },
       data: { action: 'mitigate_and_communicate', confidence: 0.88 }
+    },
+    {
+      id: 'evt-ops-policy-denied',
+      runId: DECLINED_RUN_ID,
+      seq: 11,
+      ts: isoMinutesAgo(417),
+      type: 'policy.denied',
+      subject: { kind: 'commitment', id: 'commitment-ops-002' },
+      source: { kind: 'runtime', name: 'macp-runtime' },
+      data: { reason: 'Supermajority threshold not met', commitmentId: 'commitment-ops-002' }
+    },
+    {
+      id: 'evt-ops-msg-failed',
+      runId: DECLINED_RUN_ID,
+      seq: 12,
+      ts: isoMinutesAgo(418),
+      type: 'message.send_failed',
+      subject: { kind: 'message', id: 'msg-comms-fail-001' },
+      source: { kind: 'runtime', name: 'macp-runtime' },
+      data: { from: 'comms-agent', to: 'external-api', error: 'Connection timeout' }
     }
   ]
 };

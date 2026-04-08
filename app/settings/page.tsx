@@ -44,16 +44,36 @@ export default function SettingsPage() {
   const [auditActor, setAuditActor] = useState('');
   const [auditAction, setAuditAction] = useState('');
   const [auditResource, setAuditResource] = useState('');
+  const [auditResourceId, setAuditResourceId] = useState('');
+  const [auditAfter, setAuditAfter] = useState('');
+  const [auditBefore, setAuditBefore] = useState('');
+  const [auditOffset, setAuditOffset] = useState(0);
+  const auditLimit = 10;
 
   const queryClient = useQueryClient();
   const webhooksQuery = useQuery({ queryKey: ['settings-webhooks', demoMode], queryFn: () => getWebhooks(demoMode) });
   const auditQuery = useQuery({
-    queryKey: ['settings-audit', demoMode, auditActor, auditAction, auditResource],
+    queryKey: [
+      'settings-audit',
+      demoMode,
+      auditActor,
+      auditAction,
+      auditResource,
+      auditResourceId,
+      auditAfter,
+      auditBefore,
+      auditOffset
+    ],
     queryFn: () =>
       getAuditLogs(demoMode, {
         actor: auditActor || undefined,
         action: auditAction || undefined,
-        resource: auditResource || undefined
+        resource: auditResource || undefined,
+        resourceId: auditResourceId || undefined,
+        createdAfter: auditAfter || undefined,
+        createdBefore: auditBefore || undefined,
+        limit: auditLimit,
+        offset: auditOffset
       })
   });
   const healthQuery = useQuery({ queryKey: ['settings-health', demoMode], queryFn: () => getRuntimeHealth(demoMode) });
@@ -337,13 +357,22 @@ export default function SettingsPage() {
                 <FieldLabel>Actor</FieldLabel>
                 <Input
                   value={auditActor}
-                  onChange={(e) => setAuditActor(e.target.value)}
+                  onChange={(e) => {
+                    setAuditActor(e.target.value);
+                    setAuditOffset(0);
+                  }}
                   placeholder="Filter by actor"
                 />
               </div>
               <div>
                 <FieldLabel>Action</FieldLabel>
-                <Select value={auditAction} onChange={(e) => setAuditAction(e.target.value)}>
+                <Select
+                  value={auditAction}
+                  onChange={(e) => {
+                    setAuditAction(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                >
                   <option value="">All actions</option>
                   <option value="run.create">run.create</option>
                   <option value="run.archive">run.archive</option>
@@ -352,20 +381,64 @@ export default function SettingsPage() {
                   <option value="webhook.create">webhook.create</option>
                   <option value="webhook.delete">webhook.delete</option>
                   <option value="circuit_breaker.reset">circuit_breaker.reset</option>
+                  <option value="policy.register">policy.register</option>
+                  <option value="policy.delete">policy.delete</option>
                 </Select>
               </div>
               <div>
                 <FieldLabel>Resource</FieldLabel>
-                <Select value={auditResource} onChange={(e) => setAuditResource(e.target.value)}>
+                <Select
+                  value={auditResource}
+                  onChange={(e) => {
+                    setAuditResource(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                >
                   <option value="">All resources</option>
                   <option value="run">run</option>
                   <option value="webhook">webhook</option>
                   <option value="circuit-breaker">circuit-breaker</option>
+                  <option value="policy">policy</option>
                 </Select>
               </div>
             </div>
+            <div className="grid-3">
+              <div>
+                <FieldLabel>Resource ID</FieldLabel>
+                <Input
+                  value={auditResourceId}
+                  onChange={(e) => {
+                    setAuditResourceId(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                  placeholder="Filter by resource ID"
+                />
+              </div>
+              <div>
+                <FieldLabel>Created after</FieldLabel>
+                <Input
+                  type="date"
+                  value={auditAfter}
+                  onChange={(e) => {
+                    setAuditAfter(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                />
+              </div>
+              <div>
+                <FieldLabel>Created before</FieldLabel>
+                <Input
+                  type="date"
+                  value={auditBefore}
+                  onChange={(e) => {
+                    setAuditBefore(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                />
+              </div>
+            </div>
             <div className="timeline-list">
-              {(auditQuery.data?.data ?? []).slice(0, 10).map((entry, index) => (
+              {(auditQuery.data?.data ?? []).map((entry, index) => (
                 <div key={`${entry.action}-${index}`} className="timeline-item">
                   <div className="list-item-title">{entry.action}</div>
                   <div className="list-item-meta">
@@ -377,6 +450,26 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="section-actions">
+              <Button
+                variant="ghost"
+                disabled={auditOffset === 0}
+                onClick={() => setAuditOffset(Math.max(0, auditOffset - auditLimit))}
+              >
+                Previous
+              </Button>
+              <span className="muted small">
+                Showing {auditOffset + 1}–{auditOffset + (auditQuery.data?.data.length ?? 0)} of{' '}
+                {auditQuery.data?.total ?? '?'}
+              </span>
+              <Button
+                variant="ghost"
+                disabled={(auditQuery.data?.data.length ?? 0) < auditLimit}
+                onClick={() => setAuditOffset(auditOffset + auditLimit)}
+              >
+                Next
+              </Button>
             </div>
           </CardContent>
         </Card>
