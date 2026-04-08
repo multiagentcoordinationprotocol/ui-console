@@ -21,9 +21,21 @@ export default function RunHistoryPage() {
   const [status, setStatus] = useState('all');
   const [environment, setEnvironment] = useState('all');
   const [search, setSearch] = useState('');
-  const runsQuery = useQuery({ queryKey: ['runs', demoMode], queryFn: () => listRuns(demoMode) });
+  const serverParams = useMemo(() => {
+    const params: Record<string, string | undefined> = {};
+    if (status !== 'all') params.status = status;
+    if (environment !== 'all') params.environment = environment;
+    if (search.trim()) params.search = search.trim();
+    return params;
+  }, [environment, search, status]);
+
+  const runsQuery = useQuery({
+    queryKey: ['runs', demoMode, serverParams],
+    queryFn: () => listRuns(demoMode, serverParams)
+  });
 
   const filteredRuns = useMemo(() => {
+    if (!demoMode) return runsQuery.data ?? [];
     const lower = search.toLowerCase();
     return (runsQuery.data ?? []).filter((run) => {
       const matchesStatus = status === 'all' || run.status === status;
@@ -33,7 +45,7 @@ export default function RunHistoryPage() {
         .toLowerCase();
       return matchesStatus && matchesEnv && haystack.includes(lower);
     });
-  }, [environment, runsQuery.data, search, status]);
+  }, [demoMode, environment, runsQuery.data, search, status]);
 
   const aggregate = useMemo(() => {
     const totalCost = filteredRuns.reduce((sum, run) => sum + Number(run.metadata?.estimatedCostUsd ?? 0), 0);
@@ -43,6 +55,15 @@ export default function RunHistoryPage() {
       : 0;
     return { totalCost, totalTokens, averageDuration };
   }, [filteredRuns]);
+
+  const environments = useMemo(() => {
+    const envs = new Set<string>();
+    for (const run of runsQuery.data ?? []) {
+      const env = String(run.metadata?.environment ?? '');
+      if (env) envs.add(env);
+    }
+    return Array.from(envs).sort();
+  }, [runsQuery.data]);
 
   if (runsQuery.isLoading)
     return (
@@ -148,9 +169,11 @@ export default function RunHistoryPage() {
             <label className="field-label">Environment</label>
             <Select value={environment} onChange={(event) => setEnvironment(event.target.value)}>
               <option value="all">All environments</option>
-              <option value="local-dev">local-dev</option>
-              <option value="stage">stage</option>
-              <option value="prod">prod</option>
+              {environments.map((env) => (
+                <option key={env} value={env}>
+                  {env}
+                </option>
+              ))}
             </Select>
           </div>
         </CardContent>

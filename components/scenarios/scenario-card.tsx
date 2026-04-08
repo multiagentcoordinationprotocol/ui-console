@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { PolicyBadge } from '@/components/ui/policy-badge';
 import type { ScenarioSummary } from '@/lib/types';
 
 export function ScenarioCard({ packSlug, scenario }: { packSlug: string; scenario: ScenarioSummary }) {
@@ -13,6 +14,7 @@ export function ScenarioCard({ packSlug, scenario }: { packSlug: string; scenari
       </CardHeader>
       <CardContent className="stack">
         <div className="inline-list">
+          {scenario.policyHints?.type && <PolicyBadge type={scenario.policyHints.type} />}
           {scenario.tags?.map((tag) => (
             <Badge key={tag} label={tag} />
           ))}

@@ -92,7 +92,9 @@ export default function AgentDetailPage() {
               </div>
               <div className="metric-box">
                 <div className="muted small">Avg latency</div>
-                <div className="metric-box-value">{agent.metrics.averageLatencyMs}ms</div>
+                <div className="metric-box-value">
+                  {agent.metrics.averageLatencyMs != null ? `${agent.metrics.averageLatencyMs}ms` : 'N/A'}
+                </div>
               </div>
             </div>
             <JsonViewer value={agent} />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Activity, AlertTriangle, Database, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, Database, HeartPulse, ShieldCheck } from 'lucide-react';
 import { LineChartCard } from '@/components/charts/line-chart-card';
 import { BarChartCard } from '@/components/charts/bar-chart-card';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import {
   getAuditLogs,
   getDashboardOverview,
   getObservabilityRawMetrics,
+  getReadinessProbe,
   getRuntimeHealth,
   getRuntimeManifest,
   getRuntimeModes,
@@ -37,6 +38,7 @@ export default function ObservabilityPage() {
     queryFn: () => getObservabilityRawMetrics(demoMode)
   });
   const auditQuery = useQuery({ queryKey: ['observability-audit', demoMode], queryFn: () => getAuditLogs(demoMode) });
+  const readinessQuery = useQuery({ queryKey: ['readiness', demoMode], queryFn: () => getReadinessProbe(demoMode) });
 
   if (overviewQuery.isLoading || healthQuery.isLoading) {
     return (
@@ -189,6 +191,28 @@ export default function ObservabilityPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <HeartPulse size={18} /> Readiness probe
+          </CardTitle>
+          <CardDescription>
+            Live readiness status from the Control Plane, checking database and runtime connectivity.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="stack">
+          <div className="inline-list">
+            <StatusBadge status={readinessQuery.data?.ok ? 'ok' : 'failed'} />
+            {readinessQuery.data?.checks
+              ? Object.entries(readinessQuery.data.checks).map(([key, value]) => (
+                  <Badge key={key} label={`${key}: ${value}`} tone={value === 'ok' ? 'success' : 'danger'} />
+                ))
+              : null}
+          </div>
+          {readinessQuery.data ? <JsonViewer value={readinessQuery.data} /> : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

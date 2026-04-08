@@ -1,0 +1,117 @@
+# Full-stack E2E test environment for the MACP UI Console.
+# Starts all backend services so Playwright can test the UI against real APIs.
+#
+# Usage:
+#   docker compose -f docker-compose.e2e.yml up -d --build --wait
+#   npm run test:e2e
+#   docker compose -f docker-compose.e2e.yml down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: macp_e2e
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: ../control-plane
+      dockerfile: Dockerfile
+    command: node dist/db/migrate.js
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/macp_e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  runtime:
+    image: ${MACP_RUNTIME_IMAGE:-macp-runtime:test}
+    ports:
+      - "50051:50051"
+    environment:
+      MACP_BIND_ADDR: "0.0.0.0:50051"
+      MACP_ALLOW_INSECURE: "1"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/50051'"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  control-plane:
+    build:
+      context: ../control-plane
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      HOST: "0.0.0.0"
+      NODE_ENV: development
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/macp_e2e
+      DB_POOL_MAX: "10"
+      RUNTIME_KIND: rust
+      RUNTIME_ADDRESS: runtime:50051
+      RUNTIME_TLS: "false"
+      RUNTIME_ALLOW_INSECURE: "true"
+      RUNTIME_USE_DEV_HEADER: "true"
+      RUNTIME_DEV_AGENT_ID: control-plane
+      AUTH_API_KEYS: ""
+      CORS_ORIGIN: http://localhost:3000
+      LOG_LEVEL: info
+      OTEL_ENABLED: "false"
+      STREAM_SSE_HEARTBEAT_MS: "10000"
+      RUN_RECOVERY_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      runtime:
+        condition: service_healthy
+    healthcheck:
+      test: >-
+        node -e "require('http').get('http://localhost:3001/healthz',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  examples-service:
+    build:
+      context: ../examples-service
+      dockerfile: Dockerfile
+    ports:
+      - "3100:3000"
+    environment:
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      NODE_ENV: development
+      PACKS_DIR: /app/packs
+      CONTROL_PLANE_BASE_URL: http://control-plane:3001
+      CONTROL_PLANE_API_KEY: ""
+      CONTROL_PLANE_TIMEOUT_MS: "15000"
+      AUTO_BOOTSTRAP_EXAMPLE_AGENTS: "true"
+      AUTH_API_KEYS: ""
+      LOG_LEVEL: info
+      REGISTRY_CACHE_TTL_MS: "0"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    healthcheck:
+      test: >-
+        node -e "require('http').get('http://localhost:3000/healthz',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s

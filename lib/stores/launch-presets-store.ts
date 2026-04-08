@@ -31,7 +31,7 @@ export const useLaunchPresetsStore = create<LaunchPresetsState>()(
       presets: [],
       savePreset: (preset) =>
         set((state) => ({
-          presets: [...state.presets, { ...preset, id: `preset-${Date.now()}`, createdAt: new Date().toISOString() }]
+          presets: [...state.presets, { ...preset, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]
         })),
       deletePreset: (id) => set((state) => ({ presets: state.presets.filter((p) => p.id !== id) })),
       renamePreset: (id, name) =>

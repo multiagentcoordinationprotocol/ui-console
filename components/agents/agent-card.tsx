@@ -29,7 +29,9 @@ export function AgentCard({ agent }: { agent: AgentProfile }) {
           </div>
           <div className="metric-box">
             <div className="muted small">Avg latency</div>
-            <div className="metric-box-value">{agent.metrics.averageLatencyMs}ms</div>
+            <div className="metric-box-value">
+              {agent.metrics.averageLatencyMs != null ? `${agent.metrics.averageLatencyMs}ms` : 'N/A'}
+            </div>
           </div>
         </div>
         <Link href={`/agents/${agent.agentRef}`} className="button button-secondary">

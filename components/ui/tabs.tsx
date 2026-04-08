@@ -16,6 +16,7 @@ export function Tabs({
   className
 }: {
   items: TabItem[];
+  /** @deprecated Use `defaultValue` instead. */
   defaultTab?: string;
   defaultValue?: string;
   className?: string;

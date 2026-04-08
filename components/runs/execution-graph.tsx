@@ -69,26 +69,43 @@ const nodeTypes = {
   runNode: RunGraphNode
 };
 
-function buildNodePositions(state: RunStateProjection) {
-  const base = new Map<string, { x: number; y: number }>([
-    ['start', { x: 40, y: 200 }],
-    ['context-fetch', { x: 280, y: 200 }],
-    ['fraud-agent', { x: 560, y: 70 }],
-    ['growth-agent', { x: 560, y: 330 }],
-    ['risk-agent', { x: 840, y: 200 }],
-    ['decision', { x: 1120, y: 200 }],
-    ['final-output', { x: 1380, y: 200 }]
-  ]);
+/** Column order for auto-layout based on node kind. */
+const kindColumnOrder: Record<string, number> = {
+  start: 0,
+  context: 1,
+  agent: 2,
+  decision: 3,
+  output: 4
+};
 
-  let fallbackRow = 0;
-  return state.graph.nodes.map((node) => {
-    const position = base.get(node.id) ?? {
-      x: 300 + fallbackRow * 220,
-      y: 80 + (fallbackRow % 3) * 140
-    };
-    fallbackRow += base.has(node.id) ? 0 : 1;
-    return { id: node.id, position };
-  });
+const COLUMN_WIDTH = 280;
+const ROW_HEIGHT = 160;
+const BASE_X = 40;
+const BASE_Y = 80;
+
+function buildNodePositions(state: RunStateProjection) {
+  // Group nodes by their layout column based on kind
+  const columns = new Map<number, string[]>();
+  for (const node of state.graph.nodes) {
+    const col = kindColumnOrder[node.kind] ?? 2; // default agents to col 2
+    const list = columns.get(col) ?? [];
+    list.push(node.id);
+    columns.set(col, list);
+  }
+
+  const positionMap = new Map<string, { x: number; y: number }>();
+  for (const [col, nodeIds] of columns) {
+    const totalHeight = (nodeIds.length - 1) * ROW_HEIGHT;
+    const startY = BASE_Y + Math.max(0, (2 * ROW_HEIGHT - totalHeight) / 2);
+    for (let i = 0; i < nodeIds.length; i++) {
+      positionMap.set(nodeIds[i], { x: BASE_X + col * COLUMN_WIDTH, y: startY + i * ROW_HEIGHT });
+    }
+  }
+
+  return state.graph.nodes.map((node) => ({
+    id: node.id,
+    position: positionMap.get(node.id) ?? { x: BASE_X, y: BASE_Y }
+  }));
 }
 
 export function ExecutionGraph({

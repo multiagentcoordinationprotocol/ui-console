@@ -15,8 +15,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:watch": "vitest --config vitest.integration.config.ts",
     "dev:demo": "NEXT_PUBLIC_MACP_UI_DEMO_MODE=true next dev",
-    "dev:real": "NEXT_PUBLIC_MACP_UI_DEMO_MODE=false next dev"
+    "dev:real": "NEXT_PUBLIC_MACP_UI_DEMO_MODE=false next dev",
+    "dev:e2e": "npx env-cmd -f .env.e2e next dev",
+    "test:e2e:setup": "docker compose -f docker-compose.e2e.yml up -d --build --wait",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:teardown": "docker compose -f docker-compose.e2e.yml down -v"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -42,6 +50,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -49,6 +58,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "env-cmd": "^11.0.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.1.0",
     "husky": "^9.1.7",

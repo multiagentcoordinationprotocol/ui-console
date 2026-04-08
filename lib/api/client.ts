@@ -28,20 +28,28 @@ import {
   MOCK_WEBHOOKS
 } from '@/lib/data/mock-data';
 import type {
+  AgentMetricsEntry,
   AgentProfile,
   Artifact,
   AuditListResponse,
+  BatchOperationResult,
   CanonicalEvent,
   ChartPoint,
+  CircuitBreakerResult,
   CompileLaunchRequest,
   CompileLaunchResult,
+  CreateArtifactResult,
   CreateRunResponse,
   DashboardKpis,
   LaunchSchemaResponse,
   MetricsSummary,
+  MutationAck,
   PackSummary,
+  RebuildProjectionResult,
   ReplayDescriptor,
   RunComparisonResult,
+  RunExampleResult,
+  RunExportBundle,
   RunRecord,
   RunStateProjection,
   RuntimeHealth,
@@ -49,11 +57,13 @@ import type {
   RuntimeModeDescriptor,
   RuntimeRootDescriptor,
   ScenarioSummary,
+  SendRunMessageRequest,
+  SendSignalRequest,
   TraceSummary,
   ValidateRunResponse,
   WebhookSubscription
 } from '@/lib/types';
-import { fetchJson } from '@/lib/api/fetcher';
+import { ApiError, fetchJson } from '@/lib/api/fetcher';
 
 function maybeDelay<T>(value: T, ms = 180): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
@@ -73,17 +83,24 @@ function listAllEvents(): CanonicalEvent[] {
 
 /** Map flat CP run response to the RunRecord shape the UI expects. */
 function normalizeRun(raw: Record<string, unknown>): RunRecord {
+  if (!raw.id || typeof raw.id !== 'string') {
+    throw new Error(`normalizeRun: missing or invalid 'id' field`);
+  }
+  if (!raw.status || typeof raw.status !== 'string') {
+    throw new Error(`normalizeRun: missing or invalid 'status' field for run ${raw.id}`);
+  }
+  if (!raw.runtimeKind || typeof raw.runtimeKind !== 'string') {
+    throw new Error(`normalizeRun: missing or invalid 'runtimeKind' field for run ${raw.id}`);
+  }
+
   const { sourceKind, sourceRef, ...rest } = raw as unknown as RunRecord & {
     sourceKind?: string;
     sourceRef?: string;
   };
-  const tags: string[] = (rest.tags as string[]) ?? [];
   return {
     ...rest,
     source: rest.source ?? (sourceKind || sourceRef ? { kind: sourceKind, ref: sourceRef } : undefined),
-    archivedAt:
-      rest.archivedAt ??
-      (tags.includes('archived') ? (((rest as Record<string, unknown>).updatedAt as string) ?? null) : null)
+    archivedAt: rest.archivedAt ?? null
   } as RunRecord;
 }
 
@@ -146,7 +163,7 @@ export async function compileLaunch(input: CompileLaunchRequest, demoMode: boole
 export async function runExample(
   input: CompileLaunchRequest & { bootstrapAgents?: boolean; submitToControlPlane?: boolean },
   demoMode: boolean
-) {
+): Promise<RunExampleResult> {
   if (demoMode) {
     return maybeDelay({
       compiled: await compileLaunch(input, true),
@@ -166,7 +183,7 @@ export async function runExample(
     });
   }
 
-  return fetchJson('example', '/examples/run', {
+  return fetchJson<RunExampleResult>('example', '/examples/run', {
     method: 'POST',
     body: JSON.stringify(input)
   });
@@ -216,8 +233,13 @@ export async function listRuns(
     return maybeDelay(runs);
   }
 
+  const params: Record<string, string | number | boolean | undefined> = {
+    limit: 200,
+    offset: 0,
+    ...searchParams
+  };
   const query = new URLSearchParams();
-  Object.entries(searchParams ?? {}).forEach(([key, value]) => {
+  Object.entries(params ?? {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
   });
   const suffix = query.toString() ? `?${query.toString()}` : '';
@@ -244,9 +266,9 @@ export async function getRunState(runId: string, demoMode: boolean): Promise<Run
   return fetchJson<RunStateProjection>('control-plane', `/runs/${runId}/state`);
 }
 
-export async function getRunEvents(runId: string, demoMode: boolean): Promise<CanonicalEvent[]> {
+export async function getRunEvents(runId: string, demoMode: boolean, limit = 500): Promise<CanonicalEvent[]> {
   if (demoMode) return maybeDelay(MOCK_RUN_EVENTS[runId] ?? []);
-  return fetchJson<CanonicalEvent[]>('control-plane', `/runs/${runId}/events?limit=500`);
+  return fetchJson<CanonicalEvent[]>('control-plane', `/runs/${runId}/events?limit=${limit}`);
 }
 
 export async function getRunMetrics(runId: string, demoMode: boolean): Promise<MetricsSummary> {
@@ -281,11 +303,15 @@ export async function cancelRun(
   return { ok: true, runId: String(raw.id ?? runId), status: String(raw.status ?? 'cancelled') };
 }
 
-export async function cloneRun(runId: string, demoMode: boolean) {
+export async function cloneRun(
+  runId: string,
+  demoMode: boolean,
+  overrides?: { tags?: string[]; context?: Record<string, unknown> }
+): Promise<CreateRunResponse> {
   if (demoMode) return maybeDelay({ runId: LIVE_RUN_ID, status: 'running', traceId: 'trace-live-fraud-001' });
   return fetchJson<CreateRunResponse>('control-plane', `/runs/${runId}/clone`, {
     method: 'POST',
-    body: JSON.stringify({})
+    body: JSON.stringify(overrides ?? {})
   });
 }
 
@@ -332,8 +358,9 @@ export async function getAgentProfile(agentRef: string, demoMode: boolean): Prom
   }
   try {
     return await fetchJson<AgentProfile>('example', `/agents/${encodeURIComponent(agentRef)}`);
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) return undefined;
+    throw error;
   }
 }
 
@@ -357,9 +384,9 @@ export async function getRuntimeHealth(demoMode: boolean): Promise<RuntimeHealth
   return fetchJson<RuntimeHealth>('control-plane', '/runtime/health');
 }
 
-export async function getAuditLogs(demoMode: boolean): Promise<AuditListResponse> {
+export async function getAuditLogs(demoMode: boolean, limit = 100, offset = 0): Promise<AuditListResponse> {
   if (demoMode) return maybeDelay({ data: MOCK_AUDIT_LOGS, total: MOCK_AUDIT_LOGS.length });
-  return fetchJson<AuditListResponse>('control-plane', '/audit?limit=100');
+  return fetchJson<AuditListResponse>('control-plane', `/audit?limit=${limit}&offset=${offset}`);
 }
 
 export async function getWebhooks(demoMode: boolean): Promise<WebhookSubscription[]> {
@@ -388,14 +415,14 @@ export async function createWebhook(
   });
 }
 
-export async function deleteWebhook(id: string, demoMode: boolean) {
-  if (demoMode) return maybeDelay(undefined);
-  return fetchJson('control-plane', `/webhooks/${id}`, { method: 'DELETE' });
+export async function deleteWebhook(id: string, demoMode: boolean): Promise<void> {
+  if (demoMode) return maybeDelay(undefined as unknown as void);
+  await fetchJson('control-plane', `/webhooks/${id}`, { method: 'DELETE' });
 }
 
-export async function resetCircuitBreaker(demoMode: boolean) {
+export async function resetCircuitBreaker(demoMode: boolean): Promise<CircuitBreakerResult> {
   if (demoMode) return maybeDelay({ status: 'ok', state: 'CLOSED' });
-  return fetchJson('control-plane', '/admin/circuit-breaker/reset', { method: 'POST' });
+  return fetchJson<CircuitBreakerResult>('control-plane', '/admin/circuit-breaker/reset', { method: 'POST' });
 }
 
 export async function getDashboardOverview(demoMode: boolean): Promise<{
@@ -404,6 +431,7 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
   packs: PackSummary[];
   runtimeHealth: RuntimeHealth;
   charts: Record<string, ChartPoint[]>;
+  degraded?: boolean;
 }> {
   if (demoMode) {
     return maybeDelay({
@@ -421,8 +449,16 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
     recentRuns?: Record<string, unknown>[];
     runtimeHealth?: { ok: boolean; runtimeKind: string; detail?: string };
   };
+  let overviewDegraded = false;
   const [cpOverview, runs, packs, runtimeHealth] = await Promise.all([
-    fetchJson<CpOverview>('control-plane', '/dashboard/overview').catch((): CpOverview => ({})),
+    fetchJson<CpOverview>('control-plane', '/dashboard/overview').catch((error): CpOverview => {
+      console.warn(
+        '[MACP UI] Dashboard overview endpoint unavailable:',
+        error instanceof Error ? error.message : error
+      );
+      overviewDegraded = true;
+      return {};
+    }),
     listRuns(false, { limit: 20 }),
     listPacks(false),
     getRuntimeHealth(false)
@@ -448,8 +484,8 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
       successRate,
       averageDurationMs,
       totalSignals: cpKpis.totalSignals ?? 0,
-      totalCostUsd: 0,
-      totalTokens: 0
+      totalCostUsd: cpKpis.totalCostUsd ?? cpKpis.estimatedCostUsd ?? 0,
+      totalTokens: cpKpis.totalTokens ?? 0
     },
     runs,
     packs,
@@ -465,7 +501,8 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
       latency: toChartPoints(cpCharts.latency),
       errors: toChartPoints(cpCharts.errorClasses),
       signals: toChartPoints(cpCharts.signalVolume)
-    }
+    },
+    degraded: overviewDegraded || undefined
   };
 }
 
@@ -516,4 +553,201 @@ export function getQuickCompareTarget(runId: string): string {
 
 export function listScenarioRefs(): string[] {
   return listAllScenarios().map((scenario) => `${scenario.scenario}@${scenario.versions[0]}`);
+}
+
+/* ─── Send Message / Signal into live sessions ─── */
+
+export async function sendRunMessage(
+  runId: string,
+  body: SendRunMessageRequest,
+  demoMode: boolean
+): Promise<MutationAck> {
+  if (demoMode) return maybeDelay({ ok: true, runId });
+  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+}
+
+export async function sendRunSignal(runId: string, body: SendSignalRequest, demoMode: boolean): Promise<MutationAck> {
+  if (demoMode) return maybeDelay({ ok: true, runId });
+  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/signal`, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+}
+
+/* ─── Batch operations ─── */
+
+export async function batchCancelRuns(runIds: string[], demoMode: boolean): Promise<BatchOperationResult> {
+  if (demoMode) return maybeDelay({ results: runIds.map((id) => ({ runId: id, ok: true })) });
+  return fetchJson<BatchOperationResult>('control-plane', '/runs/batch/cancel', {
+    method: 'POST',
+    body: JSON.stringify({ runIds })
+  });
+}
+
+export async function batchArchiveRuns(runIds: string[], demoMode: boolean): Promise<BatchOperationResult> {
+  if (demoMode) return maybeDelay({ results: runIds.map((id) => ({ runId: id, ok: true })) });
+  return fetchJson<BatchOperationResult>('control-plane', '/runs/batch/archive', {
+    method: 'POST',
+    body: JSON.stringify({ runIds })
+  });
+}
+
+export async function batchDeleteRuns(runIds: string[], demoMode: boolean): Promise<BatchOperationResult> {
+  if (demoMode) return maybeDelay({ results: runIds.map((id) => ({ runId: id, ok: true })) });
+  return fetchJson<BatchOperationResult>('control-plane', '/runs/batch/delete', {
+    method: 'POST',
+    body: JSON.stringify({ runIds })
+  });
+}
+
+/* ─── Run export bundle ─── */
+
+export async function exportRunBundle(runId: string, demoMode: boolean): Promise<RunExportBundle> {
+  if (demoMode) {
+    const run = MOCK_RUNS.find((r) => r.id === runId) ?? MOCK_RUNS[0];
+    return maybeDelay({
+      run,
+      projection: MOCK_RUN_STATES[runId],
+      events: MOCK_RUN_EVENTS[runId] ?? [],
+      artifacts: MOCK_RUN_ARTIFACTS[runId] ?? [],
+      metrics: MOCK_RUN_METRICS[runId]
+    });
+  }
+  return fetchJson<RunExportBundle>('control-plane', `/runs/${runId}/export`);
+}
+
+/* ─── Webhook update ─── */
+
+export async function updateWebhook(
+  id: string,
+  body: { url?: string; events?: string[]; active?: boolean },
+  demoMode: boolean
+): Promise<WebhookSubscription> {
+  if (demoMode) {
+    const existing = MOCK_WEBHOOKS.find((w) => w.id === id);
+    return maybeDelay({ ...(existing ?? {}), ...body } as WebhookSubscription);
+  }
+  return fetchJson<WebhookSubscription>('control-plane', `/webhooks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body)
+  });
+}
+
+/* ─── Update run context ─── */
+
+export async function updateRunContext(
+  runId: string,
+  body: { from: string; context: Record<string, unknown> },
+  demoMode: boolean
+): Promise<MutationAck> {
+  if (demoMode) return maybeDelay({ ok: true, runId });
+  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/context`, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+}
+
+/* ─── Create artifact ─── */
+
+export async function createArtifact(
+  runId: string,
+  body: { kind: string; label: string; uri?: string; inline?: Record<string, unknown> },
+  demoMode: boolean
+): Promise<CreateArtifactResult> {
+  if (demoMode) return maybeDelay({ id: 'demo-artifact', runId, ...body, createdAt: new Date().toISOString() });
+  return fetchJson<CreateArtifactResult>('control-plane', `/runs/${runId}/artifacts`, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+}
+
+/* ─── Projection rebuild (admin) ─── */
+
+export async function rebuildProjection(runId: string, demoMode: boolean): Promise<RebuildProjectionResult> {
+  if (demoMode) return maybeDelay({ rebuilt: true, latestSeq: 42 });
+  return fetchJson<RebuildProjectionResult>('control-plane', `/runs/${runId}/projection/rebuild`, { method: 'POST' });
+}
+
+/* ─── Readiness probe ─── */
+
+export async function getReadinessProbe(demoMode: boolean) {
+  if (demoMode)
+    return maybeDelay({
+      ok: true,
+      checks: { database: 'ok', runtime: 'ok' }
+    });
+  return fetchJson<{ ok: boolean; checks?: Record<string, string> }>('control-plane', '/readyz');
+}
+
+/* ─── Agent metrics from control plane ─── */
+
+/** Shape returned by CP GET /dashboard/agents/metrics */
+interface CpAgentMetricsEntry {
+  participantId: string;
+  runs: number;
+  signals: number;
+  messages: number;
+  averageConfidence: number;
+  averageLatencyMs?: number;
+}
+
+export async function getAgentMetrics(demoMode: boolean): Promise<AgentMetricsEntry[]> {
+  if (demoMode) {
+    return maybeDelay(
+      MOCK_AGENT_PROFILES.map((agent) => ({
+        agentRef: agent.agentRef,
+        runs: agent.metrics.runs,
+        signals: agent.metrics.signals,
+        messages: 0,
+        averageLatencyMs: agent.metrics.averageLatencyMs,
+        averageConfidence: agent.metrics.averageConfidence
+      }))
+    );
+  }
+  try {
+    const raw = await fetchJson<CpAgentMetricsEntry[]>('control-plane', '/dashboard/agents/metrics');
+    return raw.map((entry) => ({
+      agentRef: entry.participantId,
+      runs: entry.runs,
+      signals: entry.signals,
+      messages: entry.messages,
+      averageLatencyMs: entry.averageLatencyMs,
+      averageConfidence: entry.averageConfidence
+    }));
+  } catch (error) {
+    console.warn('[MACP UI] Agent metrics endpoint unavailable:', error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+/* ─── Batch export ─── */
+
+export async function batchExportRuns(runIds: string[], demoMode: boolean): Promise<RunExportBundle[]> {
+  if (demoMode) {
+    const bundles = runIds.map((id) => {
+      const run = MOCK_RUNS.find((r) => r.id === id) ?? MOCK_RUNS[0];
+      return {
+        run,
+        projection: MOCK_RUN_STATES[id],
+        events: MOCK_RUN_EVENTS[id] ?? [],
+        artifacts: MOCK_RUN_ARTIFACTS[id] ?? [],
+        metrics: MOCK_RUN_METRICS[id]
+      };
+    });
+    return maybeDelay(bundles);
+  }
+  return fetchJson<RunExportBundle[]>('control-plane', '/runs/batch/export', {
+    method: 'POST',
+    body: JSON.stringify({ runIds })
+  });
+}
+
+/* ─── Hard delete run ─── */
+
+export async function deleteRun(runId: string, demoMode: boolean): Promise<void> {
+  if (demoMode) return maybeDelay(undefined as unknown as void);
+  await fetchJson('control-plane', `/runs/${runId}`, { method: 'DELETE' });
 }

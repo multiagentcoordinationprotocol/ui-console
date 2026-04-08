@@ -7,6 +7,35 @@ export type SessionState =
   | 'SESSION_STATE_RESOLVED'
   | 'SESSION_STATE_EXPIRED';
 
+/* ─── Policy governance (RFC-MACP-0012) ─── */
+
+export type PolicyType = 'none' | 'majority' | 'supermajority' | 'unanimous' | string;
+
+export interface PolicyHints {
+  type?: PolicyType;
+  description?: string;
+  threshold?: number;
+  vetoEnabled?: boolean;
+  vetoRoles?: string[];
+  vetoThreshold?: number;
+  minimumConfidence?: number;
+  designatedRoles?: string[];
+}
+
+export interface CommitmentEvaluation {
+  commitmentId: string;
+  decision: 'allow' | 'deny';
+  reasons: string[];
+  ts: string;
+}
+
+export interface PolicyProjection {
+  policyVersion?: string;
+  policyDescription?: string;
+  resolvedAt?: string;
+  commitmentEvaluations: CommitmentEvaluation[];
+}
+
 export interface PackSummary {
   slug: string;
   name: string;
@@ -23,6 +52,8 @@ export interface ScenarioSummary {
   tags?: string[];
   runtimeKind?: string;
   agentRefs?: string[];
+  policyVersion?: string;
+  policyHints?: PolicyHints;
 }
 
 export interface LaunchSchemaAgent {
@@ -58,6 +89,7 @@ export interface LaunchSchemaResponse {
     modeVersion: string;
     configurationVersion: string;
     policyVersion?: string;
+    policyHints?: PolicyHints;
     ttlMs: number;
     initiatorParticipantId?: string;
   };
@@ -88,6 +120,7 @@ export interface ExecutionRequest {
     modeVersion: string;
     configurationVersion: string;
     policyVersion?: string;
+    policyHints?: PolicyHints;
     ttlMs: number;
     initiatorParticipantId?: string;
     participants: Array<{
@@ -209,6 +242,10 @@ export interface MetricsSummary {
   lastEventAt?: string;
   durationMs?: number;
   sessionState?: SessionState;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  estimatedCostUsd?: number;
 }
 
 export interface RunStateProjection {
@@ -265,6 +302,7 @@ export interface RunStateProjection {
     totalEvents: number;
     recent: Array<Pick<CanonicalEvent, 'id' | 'seq' | 'ts' | 'type' | 'subject'>>;
   };
+  policy?: PolicyProjection;
   trace: TraceSummary;
   outboundMessages: {
     total: number;
@@ -369,6 +407,12 @@ export interface WebhookSubscription {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  deliveryStats?: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    lastDeliveredAt?: string;
+  };
 }
 
 export interface DashboardKpis {
@@ -403,9 +447,88 @@ export interface AgentProfile {
   metrics: {
     runs: number;
     signals: number;
-    averageLatencyMs: number;
+    averageLatencyMs?: number;
     averageConfidence: number;
   };
+}
+
+export interface SendRunMessageRequest {
+  from: string;
+  to?: string[];
+  messageType: string;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SendSignalRequest {
+  from: string;
+  to: string[];
+  messageType: string;
+  payload?: Record<string, unknown>;
+  signalType?: string;
+  severity?: string;
+}
+
+export interface RunExportBundle {
+  run: RunRecord;
+  session?: Record<string, unknown>;
+  projection?: RunStateProjection;
+  events?: CanonicalEvent[];
+  artifacts?: Artifact[];
+  metrics?: MetricsSummary;
+}
+
+/* ─── Shared API response types ─── */
+
+export interface MutationAck {
+  ok: boolean;
+  runId: string;
+}
+
+export interface BatchOperationResult {
+  results: Array<{ runId: string; ok: boolean }>;
+}
+
+export interface RebuildProjectionResult {
+  rebuilt: boolean;
+  latestSeq: number;
+}
+
+export interface CircuitBreakerResult {
+  status: string;
+  state: string;
+}
+
+export interface RunExampleResult {
+  compiled: CompileLaunchResult;
+  hostedAgents: Array<Record<string, unknown>>;
+  controlPlane: {
+    baseUrl: string;
+    validated: boolean;
+    submitted: boolean;
+    runId: string;
+    status: string;
+    traceId: string;
+  };
+}
+
+export interface CreateArtifactResult {
+  id: string;
+  runId: string;
+  kind: string;
+  label: string;
+  uri?: string;
+  inline?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AgentMetricsEntry {
+  agentRef: string;
+  runs: number;
+  signals: number;
+  messages: number;
+  averageLatencyMs?: number;
+  averageConfidence: number;
 }
 
 export interface AppPreferences {

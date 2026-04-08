@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RotateCcw, Trash2, Webhook } from 'lucide-react';
+import { Pencil, RotateCcw, Trash2, Webhook } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,7 +15,8 @@ import {
   getAuditLogs,
   getRuntimeHealth,
   getWebhooks,
-  resetCircuitBreaker
+  resetCircuitBreaker,
+  updateWebhook
 } from '@/lib/api/client';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 import { formatDateTime } from '@/lib/utils/format';
@@ -65,6 +66,13 @@ export default function SettingsPage() {
 
   const deleteWebhookMutation = useMutation({
     mutationFn: (id: string) => deleteWebhook(id, demoMode),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
+    }
+  });
+
+  const toggleWebhookMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) => updateWebhook(id, { active }, demoMode),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
     }
@@ -260,19 +268,45 @@ export default function SettingsPage() {
                   style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}
                 >
                   <div>
-                    <div className="list-item-title">{webhook.url}</div>
+                    <div className="list-item-title">
+                      {webhook.url}
+                      <Badge
+                        label={webhook.active ? 'active' : 'paused'}
+                        tone={webhook.active ? 'success' : 'neutral'}
+                      />
+                    </div>
                     <div className="list-item-meta">
                       {webhook.events.join(', ')} · created {formatDateTime(webhook.createdAt)}
+                      {webhook.deliveryStats ? (
+                        <span>
+                          {' '}
+                          · {webhook.deliveryStats.succeeded}/{webhook.deliveryStats.total} delivered
+                          {webhook.deliveryStats.failed > 0 ? ` (${webhook.deliveryStats.failed} failed)` : ''}
+                          {webhook.deliveryStats.lastDeliveredAt
+                            ? ` · last ${formatDateTime(webhook.deliveryStats.lastDeliveredAt)}`
+                            : ''}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                  <Button
-                    variant="danger"
-                    onClick={() => deleteWebhookMutation.mutate(webhook.id)}
-                    disabled={deleteWebhookMutation.isPending}
-                  >
-                    <Trash2 size={16} />
-                    Remove
-                  </Button>
+                  <div className="section-actions">
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleWebhookMutation.mutate({ id: webhook.id, active: !webhook.active })}
+                      disabled={toggleWebhookMutation.isPending}
+                    >
+                      <Pencil size={14} />
+                      {webhook.active ? 'Pause' : 'Resume'}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => deleteWebhookMutation.mutate(webhook.id)}
+                      disabled={deleteWebhookMutation.isPending}
+                    >
+                      <Trash2 size={16} />
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

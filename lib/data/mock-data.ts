@@ -63,10 +63,18 @@ export const MOCK_SCENARIOS: Record<string, ScenarioSummary[]> = {
       name: 'High Value Purchase From New Device',
       summary: 'Fraud Agent, Growth Agent, and Risk Agent discuss a transaction and produce a decision.',
       versions: ['1.0.0'],
-      templates: ['default', 'strict-risk'],
+      templates: ['default', 'majority-veto', 'unanimous', 'strict-risk'],
       tags: ['fraud', 'growth', 'risk', 'demo'],
       runtimeKind: 'rust',
-      agentRefs: ['fraud-agent', 'growth-agent', 'risk-agent']
+      agentRefs: ['fraud-agent', 'growth-agent', 'risk-agent'],
+      policyVersion: 'policy.default',
+      policyHints: {
+        type: 'none',
+        description: 'Default policy — no additional governance constraints',
+        vetoThreshold: 1,
+        minimumConfidence: 0.0,
+        designatedRoles: []
+      }
     }
   ],
   trust: [
@@ -78,7 +86,9 @@ export const MOCK_SCENARIOS: Record<string, ScenarioSummary[]> = {
       templates: ['default', 'expedited'],
       tags: ['trust', 'merchant', 'kyc'],
       runtimeKind: 'rust',
-      agentRefs: ['identity-agent', 'policy-agent', 'growth-agent']
+      agentRefs: ['identity-agent', 'policy-agent', 'growth-agent'],
+      policyVersion: 'policy.trust.majority',
+      policyHints: { type: 'majority', description: 'Simple majority vote', threshold: 0.5, vetoEnabled: false }
     }
   ],
   ops: [
@@ -90,7 +100,16 @@ export const MOCK_SCENARIOS: Record<string, ScenarioSummary[]> = {
       templates: ['default', 'major-incident'],
       tags: ['ops', 'incident', 'vendor'],
       runtimeKind: 'rust',
-      agentRefs: ['ops-agent', 'comms-agent', 'risk-agent']
+      agentRefs: ['ops-agent', 'comms-agent', 'risk-agent'],
+      policyVersion: 'policy.ops.supermajority',
+      policyHints: {
+        type: 'supermajority',
+        description: 'Supermajority approval for operational triage',
+        threshold: 0.67,
+        vetoEnabled: true,
+        vetoThreshold: 1,
+        designatedRoles: ['incident-lead']
+      }
     }
   ]
 };
@@ -168,6 +187,13 @@ export const MOCK_LAUNCH_SCHEMAS: Record<string, LaunchSchemaResponse> = {
       modeVersion: '1.0.0',
       configurationVersion: 'config.default',
       policyVersion: 'policy.default',
+      policyHints: {
+        type: 'none',
+        description: 'Default policy — no additional governance constraints',
+        vetoThreshold: 1,
+        minimumConfidence: 0.0,
+        designatedRoles: []
+      },
       ttlMs: 300000,
       initiatorParticipantId: 'risk-agent'
     },
@@ -197,6 +223,13 @@ export const MOCK_LAUNCH_SCHEMAS: Record<string, LaunchSchemaResponse> = {
       modeVersion: '1.0.0',
       configurationVersion: 'config.default',
       policyVersion: 'policy.default',
+      policyHints: {
+        type: 'none',
+        description: 'Default policy — strict risk variant',
+        vetoThreshold: 1,
+        minimumConfidence: 0.0,
+        designatedRoles: []
+      },
       ttlMs: 180000,
       initiatorParticipantId: 'risk-agent'
     },
@@ -268,6 +301,7 @@ export const MOCK_LAUNCH_SCHEMAS: Record<string, LaunchSchemaResponse> = {
       modeVersion: '1.0.0',
       configurationVersion: 'config.onboarding',
       policyVersion: 'policy.standard',
+      policyHints: { type: 'majority', description: 'Simple majority vote', threshold: 0.5, vetoEnabled: false },
       ttlMs: 240000,
       initiatorParticipantId: 'policy-agent'
     },
@@ -525,6 +559,10 @@ const liveBaseState: RunStateProjection = {
     queued: 0,
     accepted: 4,
     rejected: 0
+  },
+  policy: {
+    policyVersion: 'policy.default',
+    commitmentEvaluations: []
   }
 };
 
@@ -596,14 +634,28 @@ const completedState: RunStateProjection = {
       { participantId: 'risk-agent', percentage: 100, message: 'Decision finalized', ts: isoMinutesAgo(55) }
     ]
   },
-  timeline: { latestSeq: 9, totalEvents: 9, recent: [] },
+  timeline: { latestSeq: 11, totalEvents: 11, recent: [] },
   trace: {
     traceId: 'trace-complete-fraud-002',
     spanCount: 26,
     lastSpanId: 'span-complete-26',
     linkedArtifacts: ['artifact-complete-trace', 'artifact-complete-report']
   },
-  outboundMessages: { total: 5, queued: 0, accepted: 5, rejected: 0 }
+  outboundMessages: { total: 5, queued: 0, accepted: 5, rejected: 0 },
+  policy: {
+    policyVersion: 'policy.default',
+    policyDescription: 'Default policy — no additional governance constraints',
+    resolvedAt: isoMinutesAgo(55),
+    commitmentEvaluations: [
+      {
+        commitmentId: 'eval-001',
+        decision: 'allow',
+        reasons: ['Confidence threshold met', 'No veto raised'],
+        ts: isoMinutesAgo(56)
+      },
+      { commitmentId: 'eval-002', decision: 'allow', reasons: ['Majority quorum satisfied'], ts: isoMinutesAgo(55) }
+    ]
+  }
 };
 
 const failedState: RunStateProjection = {
@@ -850,7 +902,27 @@ export const MOCK_RUN_EVENTS: Record<string, CanonicalEvent[]> = {
       { action: 'approve', confidence: 0.87 },
       { kind: 'decision', id: 'decision-complete-01' }
     ),
-    event(COMPLETED_RUN_ID, 9, 'run.completed', { status: 'completed' }, { kind: 'run', id: COMPLETED_RUN_ID })
+    event(COMPLETED_RUN_ID, 9, 'run.completed', { status: 'completed' }, { kind: 'run', id: COMPLETED_RUN_ID }),
+    {
+      id: 'evt-policy-resolved',
+      runId: COMPLETED_RUN_ID,
+      seq: 10,
+      ts: isoMinutesAgo(55),
+      type: 'policy.resolved',
+      subject: { kind: 'policy', id: 'policy.default' },
+      source: { kind: 'runtime', name: 'macp-runtime' },
+      data: { policyVersion: 'policy.default', status: 'resolved' }
+    },
+    {
+      id: 'evt-policy-eval',
+      runId: COMPLETED_RUN_ID,
+      seq: 11,
+      ts: isoMinutesAgo(55),
+      type: 'policy.commitment.evaluated',
+      subject: { kind: 'commitment', id: 'eval-001' },
+      source: { kind: 'runtime', name: 'macp-runtime' },
+      data: { decision: 'allow', reasons: ['Confidence threshold met'] }
+    }
   ],
   [FAILED_RUN_ID]: [
     event(FAILED_RUN_ID, 1, 'run.created', { status: 'queued' }),
@@ -952,11 +1024,15 @@ export const MOCK_RUN_METRICS: Record<string, MetricsSummary> = {
     firstEventAt: isoMinutesAgo(3),
     lastEventAt: isoMinutesAgo(1),
     durationMs: 158000,
-    sessionState: 'SESSION_STATE_OPEN'
+    sessionState: 'SESSION_STATE_OPEN',
+    promptTokens: 800,
+    completionTokens: 240,
+    totalTokens: 1040,
+    estimatedCostUsd: 0.0031
   },
   [COMPLETED_RUN_ID]: {
     runId: COMPLETED_RUN_ID,
-    eventCount: 9,
+    eventCount: 11,
     messageCount: 5,
     signalCount: 2,
     proposalCount: 2,
@@ -966,7 +1042,11 @@ export const MOCK_RUN_METRICS: Record<string, MetricsSummary> = {
     firstEventAt: isoMinutesAgo(58),
     lastEventAt: isoMinutesAgo(55),
     durationMs: 183000,
-    sessionState: 'SESSION_STATE_RESOLVED'
+    sessionState: 'SESSION_STATE_RESOLVED',
+    promptTokens: 2400,
+    completionTokens: 680,
+    totalTokens: 3080,
+    estimatedCostUsd: 0.0086
   },
   [FAILED_RUN_ID]: {
     runId: FAILED_RUN_ID,

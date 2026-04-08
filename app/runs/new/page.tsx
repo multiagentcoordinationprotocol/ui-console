@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FieldLabel, Input, Select, Textarea } from '@/components/ui/field';
+import { PolicyBadge } from '@/components/ui/policy-badge';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
 import {
@@ -175,11 +176,11 @@ function NewRunPageContent() {
         },
         demoMode
       );
-      setBootstrapResult(result as Record<string, unknown>);
-      return result as Record<string, unknown>;
+      setBootstrapResult(result as unknown as Record<string, unknown>);
+      return result;
     },
     onSuccess: (result) => {
-      const runId = String((result.controlPlane as { runId?: string } | undefined)?.runId ?? '');
+      const runId = result.controlPlane?.runId ?? '';
       if (runId) router.push(`/runs/live/${runId}`);
     }
   });
@@ -410,7 +411,12 @@ function NewRunPageContent() {
               <Badge label={schema.runtime.kind} tone="info" />
               <Badge label={schema.launchSummary.modeName} tone="info" />
               <Badge label={`ttl:${schema.launchSummary.ttlMs}ms`} />
+              {schema.launchSummary.policyVersion && <Badge label={schema.launchSummary.policyVersion} tone="info" />}
+              {schema.launchSummary.policyHints?.type && <PolicyBadge type={schema.launchSummary.policyHints.type} />}
             </div>
+            {schema.launchSummary.policyHints?.description && (
+              <p className="muted small">{schema.launchSummary.policyHints.description}</p>
+            )}
             <div className="section-actions">
               <Button
                 variant="secondary"

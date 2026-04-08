@@ -7,21 +7,44 @@ interface ServiceConfig {
   authToken?: string;
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+function resolveBaseUrl(envVar: string, fallback: string, service: ProxyService): string {
+  const url = process.env[envVar];
+  if (url) return url;
+  if (isProduction) {
+    throw new Error(
+      `[MACP UI] ${envVar} is required in production. ` +
+        `Service '${service}' cannot fall back to ${fallback} in a production build.`
+    );
+  }
+  console.warn(`[MACP UI] ${envVar} not set, falling back to ${fallback} (dev only)`);
+  return fallback;
+}
+
+function resolveAuthToken(envVar: string, service: ProxyService): string {
+  const token = process.env[envVar] ?? '';
+  if (!token && isProduction) {
+    console.warn(`[MACP UI] ${envVar} is not set. Requests to '${service}' will be unauthenticated.`);
+  }
+  return token;
+}
+
 export function getIntegrationConfig(service: ProxyService): ServiceConfig {
   if (service === 'example') {
     return {
       service,
-      baseUrl: process.env.EXAMPLE_SERVICE_BASE_URL ?? 'http://localhost:3000',
+      baseUrl: resolveBaseUrl('EXAMPLE_SERVICE_BASE_URL', 'http://localhost:3000', service),
       authHeaderName: 'x-api-key',
-      authToken: process.env.EXAMPLE_SERVICE_API_KEY ?? ''
+      authToken: resolveAuthToken('EXAMPLE_SERVICE_API_KEY', service)
     };
   }
 
   return {
     service,
-    baseUrl: process.env.CONTROL_PLANE_BASE_URL ?? 'http://localhost:3001',
+    baseUrl: resolveBaseUrl('CONTROL_PLANE_BASE_URL', 'http://localhost:3001', service),
     authHeaderName: 'authorization',
-    authToken: process.env.CONTROL_PLANE_API_KEY ?? ''
+    authToken: resolveAuthToken('CONTROL_PLANE_API_KEY', service)
   };
 }
 
