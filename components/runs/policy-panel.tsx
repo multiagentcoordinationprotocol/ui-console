@@ -3,10 +3,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PolicyBadge } from '@/components/ui/policy-badge';
-import type { PolicyProjection } from '@/lib/types';
+import { PolicyRulesCard } from '@/components/ui/policy-rules-card';
+import type { PolicyHints, PolicyProjection } from '@/lib/types';
 import { formatDateTime } from '@/lib/utils/format';
 
-export function PolicyPanel({ policy }: { policy: PolicyProjection }) {
+export function PolicyPanel({ policy, policyHints }: { policy: PolicyProjection; policyHints?: PolicyHints }) {
   return (
     <Card>
       <CardHeader>
@@ -19,6 +20,8 @@ export function PolicyPanel({ policy }: { policy: PolicyProjection }) {
         <div className="inline-list">
           {policy.policyVersion && <Badge label={policy.policyVersion} tone="info" />}
           {policy.resolvedAt ? <Badge label="resolved" tone="success" /> : <Badge label="pending" tone="warning" />}
+          {policy.outcomePositive === true && <Badge label="Policy satisfied" tone="success" />}
+          {policy.outcomePositive === false && <Badge label="Policy violated" tone="danger" />}
         </div>
 
         {policy.policyDescription && <p className="muted">{policy.policyDescription}</p>}
@@ -28,6 +31,10 @@ export function PolicyPanel({ policy }: { policy: PolicyProjection }) {
             <div className="list-item-title">Resolved at</div>
             <div className="list-item-meta">{formatDateTime(policy.resolvedAt)}</div>
           </div>
+        )}
+
+        {policyHints && policyHints.type && policyHints.type !== 'none' && (
+          <PolicyRulesCard hints={policyHints} policyVersion={policy.policyVersion} compact />
         )}
 
         {policy.commitmentEvaluations.length > 0 && (

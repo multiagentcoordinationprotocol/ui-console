@@ -9,6 +9,7 @@ import type {
   LaunchSchemaResponse,
   MetricsSummary,
   PackSummary,
+  PolicyDefinition,
   ReplayDescriptor,
   RunComparisonResult,
   RunRecord,
@@ -16,6 +17,7 @@ import type {
   RuntimeHealth,
   RuntimeManifestResult,
   RuntimeModeDescriptor,
+  RuntimePolicyDescriptor,
   RuntimeRootDescriptor,
   ScenarioSummary,
   TraceSummary,
@@ -192,6 +194,70 @@ export const MOCK_LAUNCH_SCHEMAS: Record<string, LaunchSchemaResponse> = {
         description: 'Default policy — no additional governance constraints',
         vetoThreshold: 1,
         minimumConfidence: 0.0,
+        designatedRoles: []
+      },
+      ttlMs: 300000,
+      initiatorParticipantId: 'risk-agent'
+    },
+    expectedDecisionKinds: ['approve', 'step_up', 'decline']
+  },
+  'fraud/high-value-new-device@1.0.0:majority-veto': {
+    scenarioRef: 'fraud/high-value-new-device@1.0.0',
+    templateId: 'majority-veto',
+    formSchema: {},
+    defaults: { customerId: 'CUST-1001', transactionAmount: 2400 },
+    participants: [
+      { id: 'fraud-agent', role: 'fraud', agentRef: 'fraud-agent' },
+      { id: 'growth-agent', role: 'growth', agentRef: 'growth-agent' },
+      { id: 'risk-agent', role: 'risk', agentRef: 'risk-agent' }
+    ],
+    agents: [],
+    runtime: { kind: 'rust', version: 'v1' },
+    launchSummary: {
+      modeName: 'macp.mode.decision.v1',
+      modeVersion: '1.0.0',
+      configurationVersion: 'config.majority-veto',
+      policyVersion: 'policy.fraud.majority-veto',
+      policyHints: {
+        type: 'majority',
+        description: 'Simple majority vote with designated veto power',
+        threshold: 0.5,
+        vetoEnabled: true,
+        criticalSeverityVetoes: true,
+        vetoThreshold: 1,
+        minimumConfidence: 0.0,
+        designatedRoles: []
+      },
+      ttlMs: 300000,
+      initiatorParticipantId: 'risk-agent'
+    },
+    expectedDecisionKinds: ['approve', 'step_up', 'decline']
+  },
+  'fraud/high-value-new-device@1.0.0:unanimous': {
+    scenarioRef: 'fraud/high-value-new-device@1.0.0',
+    templateId: 'unanimous',
+    formSchema: {},
+    defaults: { customerId: 'CUST-1001', transactionAmount: 2400 },
+    participants: [
+      { id: 'fraud-agent', role: 'fraud', agentRef: 'fraud-agent' },
+      { id: 'growth-agent', role: 'growth', agentRef: 'growth-agent' },
+      { id: 'risk-agent', role: 'risk', agentRef: 'risk-agent' }
+    ],
+    agents: [],
+    runtime: { kind: 'rust', version: 'v1' },
+    launchSummary: {
+      modeName: 'macp.mode.decision.v1',
+      modeVersion: '1.0.0',
+      configurationVersion: 'config.unanimous',
+      policyVersion: 'policy.fraud.unanimous',
+      policyHints: {
+        type: 'unanimous',
+        description: 'Fraud review: unanimous approval required',
+        threshold: 1.0,
+        vetoEnabled: true,
+        criticalSeverityVetoes: true,
+        vetoThreshold: 1,
+        minimumConfidence: 0.7,
         designatedRoles: []
       },
       ttlMs: 300000,
@@ -562,6 +628,7 @@ const liveBaseState: RunStateProjection = {
   },
   policy: {
     policyVersion: 'policy.default',
+    policyDescription: 'Default policy — no additional governance constraints',
     commitmentEvaluations: []
   }
 };
@@ -604,6 +671,7 @@ const completedState: RunStateProjection = {
       confidence: 0.87,
       reasons: ['Chargeback history was low.', 'Growth upside outweighed friction cost.'],
       finalized: true,
+      outcomePositive: true,
       proposalId: 'CUST-1001-initial-review'
     }
   },
@@ -646,6 +714,7 @@ const completedState: RunStateProjection = {
     policyVersion: 'policy.default',
     policyDescription: 'Default policy — no additional governance constraints',
     resolvedAt: isoMinutesAgo(55),
+    outcomePositive: true,
     commitmentEvaluations: [
       {
         commitmentId: 'eval-001',
@@ -715,7 +784,13 @@ const failedState: RunStateProjection = {
     lastSpanId: 'span-failed-14',
     linkedArtifacts: ['artifact-failed-log']
   },
-  outboundMessages: { total: 3, queued: 0, accepted: 2, rejected: 1 }
+  outboundMessages: { total: 3, queued: 0, accepted: 2, rejected: 1 },
+  policy: {
+    policyVersion: 'policy.trust.majority',
+    policyDescription: 'Simple majority vote for trust onboarding',
+    resolvedAt: isoMinutesAgo(188),
+    commitmentEvaluations: []
+  }
 };
 
 const opsState: RunStateProjection = {
@@ -759,6 +834,7 @@ const opsState: RunStateProjection = {
       confidence: 0.93,
       reasons: ['Vendor outage impacted checkout flows.', 'Immediate customer notice reduced escalations.'],
       finalized: true,
+      outcomePositive: true,
       proposalId: 'incident-ops-004'
     }
   },
@@ -792,7 +868,16 @@ const opsState: RunStateProjection = {
     lastSpanId: 'span-ops-22',
     linkedArtifacts: ['artifact-ops-report']
   },
-  outboundMessages: { total: 4, queued: 0, accepted: 4, rejected: 0 }
+  outboundMessages: { total: 4, queued: 0, accepted: 4, rejected: 0 },
+  policy: {
+    policyVersion: 'policy.ops.supermajority',
+    policyDescription: 'Supermajority approval for operational triage',
+    resolvedAt: isoMinutesAgo(414),
+    outcomePositive: true,
+    commitmentEvaluations: [
+      { commitmentId: 'ops-eval-001', decision: 'allow', reasons: ['Supermajority achieved'], ts: isoMinutesAgo(415) }
+    ]
+  }
 };
 
 function buildRecent(events: CanonicalEvent[]) {
@@ -922,6 +1007,16 @@ export const MOCK_RUN_EVENTS: Record<string, CanonicalEvent[]> = {
       subject: { kind: 'commitment', id: 'eval-001' },
       source: { kind: 'runtime', name: 'macp-runtime' },
       data: { decision: 'allow', reasons: ['Confidence threshold met'] }
+    },
+    {
+      id: 'evt-decision-proposed',
+      runId: COMPLETED_RUN_ID,
+      seq: 12,
+      ts: isoMinutesAgo(56),
+      type: 'decision.proposed',
+      subject: { kind: 'decision', id: 'CUST-1001-initial-review' },
+      source: { kind: 'runtime', name: 'macp-runtime' },
+      data: { action: 'approve', confidence: 0.87 }
     }
   ],
   [FAILED_RUN_ID]: [
@@ -995,7 +1090,27 @@ export const MOCK_RUN_EVENTS: Record<string, CanonicalEvent[]> = {
       { action: 'mitigate_and_communicate', confidence: 0.93 },
       { kind: 'decision', id: 'decision-ops-01' }
     ),
-    event(DECLINED_RUN_ID, 8, 'run.completed', { status: 'completed' }, { kind: 'run', id: DECLINED_RUN_ID })
+    event(DECLINED_RUN_ID, 8, 'run.completed', { status: 'completed' }, { kind: 'run', id: DECLINED_RUN_ID }),
+    {
+      id: 'evt-ops-policy-resolved',
+      runId: DECLINED_RUN_ID,
+      seq: 9,
+      ts: isoMinutesAgo(414),
+      type: 'policy.resolved',
+      subject: { kind: 'policy', id: 'policy.ops.supermajority' },
+      source: { kind: 'runtime', name: 'macp-runtime' },
+      data: { policyVersion: 'policy.ops.supermajority', status: 'resolved' }
+    },
+    {
+      id: 'evt-ops-decision-proposed',
+      runId: DECLINED_RUN_ID,
+      seq: 10,
+      ts: isoMinutesAgo(416),
+      type: 'decision.proposed',
+      subject: { kind: 'decision', id: 'incident-ops-004' },
+      source: { kind: 'runtime', name: 'macp-runtime' },
+      data: { action: 'mitigate_and_communicate', confidence: 0.88 }
+    }
   ]
 };
 
@@ -1060,7 +1175,11 @@ export const MOCK_RUN_METRICS: Record<string, MetricsSummary> = {
     firstEventAt: isoMinutesAgo(188),
     lastEventAt: isoMinutesAgo(184),
     durationMs: 221000,
-    sessionState: 'SESSION_STATE_OPEN'
+    sessionState: 'SESSION_STATE_OPEN',
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    estimatedCostUsd: 0
   },
   [DECLINED_RUN_ID]: {
     runId: DECLINED_RUN_ID,
@@ -1074,7 +1193,11 @@ export const MOCK_RUN_METRICS: Record<string, MetricsSummary> = {
     firstEventAt: isoMinutesAgo(420),
     lastEventAt: isoMinutesAgo(414),
     durationMs: 367000,
-    sessionState: 'SESSION_STATE_RESOLVED'
+    sessionState: 'SESSION_STATE_RESOLVED',
+    promptTokens: 1200,
+    completionTokens: 340,
+    totalTokens: 1540,
+    estimatedCostUsd: 0.0046
   }
 };
 
@@ -1367,6 +1490,108 @@ export const MOCK_AUDIT_LOGS: AuditEntry[] = [
 
 export const MOCK_PROMETHEUS_METRICS = `# HELP macp_runs_total Total runs seen by control plane\n# TYPE macp_runs_total counter\nmacp_runs_total 4\n# HELP macp_live_runs Active runs\n# TYPE macp_live_runs gauge\nmacp_live_runs 1\n# HELP macp_stream_reconnects_total SSE reconnect count\n# TYPE macp_stream_reconnects_total counter\nmacp_stream_reconnects_total 2\n`;
 
+export const MOCK_POLICY_DEFINITIONS: PolicyDefinition[] = [
+  {
+    policy_id: 'policy.default',
+    mode: 'macp.mode.decision.v1',
+    schema_version: 1,
+    description: 'Default — no additional governance constraints',
+    rules: {
+      voting: { algorithm: 'none' },
+      objection_handling: { critical_severity_vetoes: false, veto_threshold: 0 },
+      evaluation: { minimum_confidence: 0.0, required_before_voting: false },
+      commitment: { authority: 'initiator_only', require_vote_quorum: false, designated_roles: [] }
+    }
+  },
+  {
+    policy_id: 'policy.fraud.majority-veto',
+    mode: 'macp.mode.decision.v1',
+    schema_version: 1,
+    description: 'Simple majority vote with designated veto power',
+    rules: {
+      voting: { algorithm: 'majority', threshold: 0.5, quorum: { type: 'percentage', value: 0.5 } },
+      objection_handling: { critical_severity_vetoes: true, veto_threshold: 1 },
+      evaluation: { minimum_confidence: 0.0, required_before_voting: false },
+      commitment: { authority: 'initiator_only', require_vote_quorum: true, designated_roles: [] }
+    }
+  },
+  {
+    policy_id: 'policy.fraud.supermajority',
+    mode: 'macp.mode.decision.v1',
+    schema_version: 1,
+    description: 'Supermajority (67%) approval required',
+    rules: {
+      voting: { algorithm: 'supermajority', threshold: 0.67, quorum: { type: 'percentage', value: 0.67 } },
+      objection_handling: { critical_severity_vetoes: false, veto_threshold: 0 },
+      evaluation: { minimum_confidence: 0.0, required_before_voting: false },
+      commitment: { authority: 'initiator_only', require_vote_quorum: true, designated_roles: [] }
+    }
+  },
+  {
+    policy_id: 'policy.fraud.unanimous',
+    mode: 'macp.mode.decision.v1',
+    schema_version: 1,
+    description: 'Fraud review: unanimous approval required',
+    rules: {
+      voting: { algorithm: 'unanimous', quorum: { type: 'percentage', value: 1.0 } },
+      objection_handling: { critical_severity_vetoes: true, veto_threshold: 1 },
+      evaluation: { minimum_confidence: 0.7, required_before_voting: true },
+      commitment: { authority: 'initiator_only', require_vote_quorum: true, designated_roles: [] }
+    }
+  },
+  {
+    policy_id: 'policy.lending.conservative',
+    mode: 'macp.mode.decision.v1',
+    schema_version: 1,
+    description: 'Conservative lending: supermajority with confidence floor',
+    rules: {
+      voting: { algorithm: 'supermajority', threshold: 0.67, quorum: { type: 'percentage', value: 0.67 } },
+      objection_handling: { critical_severity_vetoes: true, veto_threshold: 1 },
+      evaluation: { minimum_confidence: 0.6, required_before_voting: true },
+      commitment: { authority: 'initiator_only', require_vote_quorum: true, designated_roles: [] }
+    }
+  },
+  {
+    policy_id: 'policy.claims.majority',
+    mode: 'macp.mode.decision.v1',
+    schema_version: 1,
+    description: 'Claims review: simple majority',
+    rules: {
+      voting: { algorithm: 'majority', threshold: 0.5, quorum: { type: 'percentage', value: 0.5 } },
+      objection_handling: { critical_severity_vetoes: false, veto_threshold: 0 },
+      evaluation: { minimum_confidence: 0.0, required_before_voting: false },
+      commitment: { authority: 'initiator_only', require_vote_quorum: true, designated_roles: [] }
+    }
+  }
+];
+
+export const MOCK_RUNTIME_POLICIES: RuntimePolicyDescriptor[] = [
+  {
+    policyId: 'policy.default',
+    mode: 'macp.mode.decision.v1',
+    description: 'Default — no additional governance constraints',
+    rules: MOCK_POLICY_DEFINITIONS[0].rules,
+    schemaVersion: 1,
+    registeredAtUnixMs: Date.now() - 86400000 * 7
+  },
+  {
+    policyId: 'policy.fraud.majority-veto',
+    mode: 'macp.mode.decision.v1',
+    description: 'Simple majority vote with designated veto power',
+    rules: MOCK_POLICY_DEFINITIONS[1].rules,
+    schemaVersion: 1,
+    registeredAtUnixMs: Date.now() - 86400000 * 3
+  },
+  {
+    policyId: 'policy.fraud.unanimous',
+    mode: 'macp.mode.decision.v1',
+    description: 'Fraud review: unanimous approval required',
+    rules: MOCK_POLICY_DEFINITIONS[3].rules,
+    schemaVersion: 1,
+    registeredAtUnixMs: Date.now() - 86400000
+  }
+];
+
 export const MOCK_CHARTS = {
   runVolume: [
     { label: '00:00', value: 4 },
@@ -1400,8 +1625,9 @@ export function computeDashboardKpis(): DashboardKpis {
   const activeRuns = MOCK_RUNS.filter((run) =>
     ['queued', 'starting', 'binding_session', 'running'].includes(run.status)
   ).length;
-  const completed = MOCK_RUNS.filter((run) => run.status === 'completed').length;
-  const successRate = totalRuns === 0 ? 0 : completed / totalRuns;
+  const completedRuns = MOCK_RUNS.filter((run) => run.status === 'completed').length;
+  const failedRuns = MOCK_RUNS.filter((run) => run.status === 'failed').length;
+  const cancelledRuns = MOCK_RUNS.filter((run) => run.status === 'cancelled').length;
   const averageDurationMs =
     Object.values(MOCK_RUN_METRICS).reduce((acc, metric) => acc + (metric.durationMs ?? 0), 0) / totalRuns;
   const totalSignals = Object.values(MOCK_RUN_METRICS).reduce((acc, metric) => acc + metric.signalCount, 0);
@@ -1410,7 +1636,9 @@ export function computeDashboardKpis(): DashboardKpis {
   return {
     totalRuns,
     activeRuns,
-    successRate,
+    completedRuns,
+    failedRuns,
+    cancelledRuns,
     averageDurationMs,
     totalSignals,
     totalCostUsd,

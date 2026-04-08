@@ -132,7 +132,22 @@ export function RunsTable({ runs, showCompare = true }: { runs: RunRecord[]; sho
                   <div className="muted small">{String(run.metadata?.environment ?? 'unknown')}</div>
                 </td>
                 <td>
-                  <StatusBadge status={run.status} />
+                  <div className="inline-list" style={{ gap: 4 }}>
+                    <StatusBadge status={run.status} />
+                    {run.status === 'completed' && typeof run.metadata?.finalAction === 'string' && (
+                      <span
+                        title={`Outcome: ${run.metadata.finalAction}`}
+                        style={{
+                          display: 'inline-block',
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor:
+                            run.metadata.finalAction === 'decline' ? 'var(--color-danger)' : 'var(--color-success)'
+                        }}
+                      />
+                    )}
+                  </div>
                 </td>
                 <td>{String(run.metadata?.scenarioRef ?? run.source?.ref ?? '—')}</td>
                 <td>{formatDateTime(run.startedAt ?? run.createdAt)}</td>

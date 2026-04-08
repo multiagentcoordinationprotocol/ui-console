@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { PolicyBadge } from '@/components/ui/policy-badge';
+import { PolicyRulesCard } from '@/components/ui/policy-rules-card';
 import { Select } from '@/components/ui/field';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
 import { getLaunchSchema, listScenarios } from '@/lib/api/client';
@@ -175,59 +176,10 @@ function ScenarioDetailContent() {
 
         <div className="panel-stack">
           {schema.launchSummary.policyHints && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Policy governance</CardTitle>
-                <CardDescription>RFC-MACP-0012 governance constraints for this scenario template.</CardDescription>
-              </CardHeader>
-              <CardContent className="stack">
-                <div className="inline-list">
-                  {schema.launchSummary.policyVersion && (
-                    <Badge label={schema.launchSummary.policyVersion} tone="info" />
-                  )}
-                  <PolicyBadge type={schema.launchSummary.policyHints.type} />
-                </div>
-                {schema.launchSummary.policyHints.description && (
-                  <p className="muted">{schema.launchSummary.policyHints.description}</p>
-                )}
-                <div className="metric-strip">
-                  {schema.launchSummary.policyHints.threshold != null && (
-                    <div className="metric-box">
-                      <div className="muted small">Vote threshold</div>
-                      <div className="metric-box-value">
-                        {Math.round(schema.launchSummary.policyHints.threshold * 100)}%
-                      </div>
-                    </div>
-                  )}
-                  {schema.launchSummary.policyHints.minimumConfidence != null && (
-                    <div className="metric-box">
-                      <div className="muted small">Min confidence</div>
-                      <div className="metric-box-value">
-                        {Math.round(schema.launchSummary.policyHints.minimumConfidence * 100)}%
-                      </div>
-                    </div>
-                  )}
-                  {schema.launchSummary.policyHints.vetoEnabled != null && (
-                    <div className="metric-box">
-                      <div className="muted small">Veto</div>
-                      <div className="metric-box-value">
-                        {schema.launchSummary.policyHints.vetoEnabled ? 'Enabled' : 'Disabled'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {(schema.launchSummary.policyHints.designatedRoles ?? []).length > 0 && (
-                  <div>
-                    <div className="muted small">Designated roles</div>
-                    <div className="inline-list">
-                      {schema.launchSummary.policyHints.designatedRoles!.map((role) => (
-                        <Badge key={role} label={role} tone="warning" />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <PolicyRulesCard
+              hints={schema.launchSummary.policyHints}
+              policyVersion={schema.launchSummary.policyVersion}
+            />
           )}
           <Card>
             <CardHeader>

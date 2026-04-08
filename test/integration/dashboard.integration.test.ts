@@ -56,14 +56,16 @@ describe('Dashboard (integration)', () => {
     expect(result.runtimeHealth.ok).toBe(true);
   });
 
-  it('computes successRate from CP kpis', async () => {
+  it('returns run breakdown counts from CP kpis', async () => {
     setupAllEndpoints();
 
     const { getDashboardOverview } = await import('@/lib/api/client');
     const result = await getDashboardOverview(false);
 
-    // totalRuns=42, completedRuns=35 → 35/42 ≈ 0.833
-    expect(result.kpis.successRate).toBeCloseTo(35 / 42, 2);
+    // totalRuns=42, completedRuns=35
+    expect(result.kpis.completedRuns).toBe(35);
+    expect(result.kpis.failedRuns).toBeDefined();
+    expect(result.kpis.cancelledRuns).toBeDefined();
   });
 
   it('converts chart data to ChartPoint arrays', async () => {
@@ -152,7 +154,7 @@ describe('Dashboard (integration)', () => {
 
     expect(result.kpis.totalRuns).toBe(3);
     expect(result.kpis.activeRuns).toBe(1); // 1 running
-    expect(result.kpis.successRate).toBeCloseTo(2 / 3, 2); // 2 completed out of 3
+    expect(result.kpis.completedRuns).toBe(2); // 2 completed out of 3
   });
 
   it('extracts totalTokens and totalCostUsd from CP kpis when available', async () => {
@@ -253,6 +255,7 @@ describe('Dashboard (integration)', () => {
     // KPIs are computed from the runs fallback when overview fails
     expect(result.kpis.totalRuns).toBe(4);
     expect(result.kpis.activeRuns).toBe(1); // 1 running
-    expect(result.kpis.successRate).toBeCloseTo(2 / 4, 2); // 2 completed out of 4
+    expect(result.kpis.completedRuns).toBe(2); // 2 completed out of 4
+    expect(result.kpis.failedRuns).toBe(1);
   });
 });

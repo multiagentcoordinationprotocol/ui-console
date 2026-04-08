@@ -52,6 +52,7 @@ export default function DashboardPage() {
   }
 
   const { kpis, charts, runs, runtimeHealth, packs } = overviewQuery.data;
+  const successRate = kpis.totalRuns === 0 ? 0 : kpis.completedRuns / kpis.totalRuns;
   const activeRuns = runs.filter((run) => ['queued', 'starting', 'binding_session', 'running'].includes(run.status));
   const recentRuns = runs.slice(0, 4);
   const recentAudit = auditQuery.data?.data.slice(0, 6) ?? [];
@@ -89,7 +90,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="kpi-card">
             <div className="kpi-label">Success rate</div>
-            <div className="kpi-value">{formatPercent(kpis.successRate)}</div>
+            <div className="kpi-value">{formatPercent(successRate)}</div>
             <div className="kpi-meta">Healthy decision completion rate</div>
           </CardContent>
         </Card>
@@ -105,6 +106,36 @@ export default function DashboardPage() {
             <div className="kpi-label">Total cost</div>
             <div className="kpi-value">{formatCurrency(kpis.totalCostUsd)}</div>
             <div className="kpi-meta">{formatNumber(kpis.totalTokens)} tokens processed</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid-3">
+        <Card>
+          <CardContent className="kpi-card">
+            <div className="kpi-label">Completed</div>
+            <div className="kpi-value" style={{ color: 'var(--color-success)' }}>
+              {formatNumber(kpis.completedRuns)}
+            </div>
+            <div className="kpi-meta">Successfully resolved runs</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="kpi-card">
+            <div className="kpi-label">Failed</div>
+            <div className="kpi-value" style={{ color: 'var(--color-danger)' }}>
+              {formatNumber(kpis.failedRuns)}
+            </div>
+            <div className="kpi-meta">Runs that encountered errors</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="kpi-card">
+            <div className="kpi-label">Cancelled</div>
+            <div className="kpi-value" style={{ color: 'var(--color-warning)' }}>
+              {formatNumber(kpis.cancelledRuns)}
+            </div>
+            <div className="kpi-meta">Manually or automatically cancelled</div>
           </CardContent>
         </Card>
       </div>

@@ -141,6 +141,10 @@ function SendSignalForm({
   const [severity, setSeverity] = useState('medium');
   const [payload, setPayload] = useState('{}');
 
+  const parsedPayload = safeParseJson(payload);
+  const payloadHasContent = Object.keys(parsedPayload).length > 0;
+  const signalTypeRequired = payloadHasContent && !signalType.trim();
+
   const mutation = useMutation({
     mutationFn: () =>
       sendRunSignal(
@@ -152,7 +156,7 @@ function SendSignalForm({
             .map((s) => s.trim())
             .filter(Boolean),
           messageType,
-          payload: safeParseJson(payload),
+          payload: parsedPayload,
           signalType: signalType || undefined,
           severity
         },
@@ -213,7 +217,8 @@ function SendSignalForm({
         <FieldLabel>Payload (JSON)</FieldLabel>
         <Textarea value={payload} onChange={(e) => setPayload(e.target.value)} rows={3} />
       </div>
-      <Button type="submit" disabled={mutation.isPending || !from || !to.trim()}>
+      {signalTypeRequired && <div className="error-text">Signal type is required when payload is provided</div>}
+      <Button type="submit" disabled={mutation.isPending || !from || !to.trim() || signalTypeRequired}>
         <Radio size={14} />
         {mutation.isPending ? 'Sending...' : 'Send signal'}
       </Button>

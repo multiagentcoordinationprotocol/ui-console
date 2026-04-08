@@ -23,6 +23,7 @@ import {
   MOCK_RUNTIME_HEALTH,
   MOCK_RUNTIME_MANIFEST,
   MOCK_RUNTIME_MODES,
+  MOCK_RUNTIME_POLICIES,
   MOCK_RUNTIME_ROOTS,
   MOCK_SCENARIOS,
   MOCK_WEBHOOKS
@@ -41,11 +42,16 @@ import type {
   CreateArtifactResult,
   CreateRunResponse,
   DashboardKpis,
+  ExportRunQuery,
   LaunchSchemaResponse,
+  ListAuditQuery,
+  ListRunsQuery,
   MetricsSummary,
   MutationAck,
   PackSummary,
+  ReadinessProbeResponse,
   RebuildProjectionResult,
+  RegisterPolicyRequest,
   ReplayDescriptor,
   RunComparisonResult,
   RunExampleResult,
@@ -55,6 +61,7 @@ import type {
   RuntimeHealth,
   RuntimeManifestResult,
   RuntimeModeDescriptor,
+  RuntimePolicyDescriptor,
   RuntimeRootDescriptor,
   ScenarioSummary,
   SendRunMessageRequest,
@@ -178,7 +185,9 @@ export async function runExample(
         submitted: input.submitToControlPlane !== false,
         runId: LIVE_RUN_ID,
         status: 'running',
-        traceId: 'trace-live-fraud-001'
+        traceId: 'trace-live-fraud-001',
+        policyRegistered: true,
+        policyVersion: 'policy.default'
       }
     });
   }
@@ -223,25 +232,49 @@ export async function createRun(body: Record<string, unknown>, demoMode: boolean
   });
 }
 
-export async function listRuns(
-  demoMode: boolean,
-  searchParams?: Record<string, string | number | boolean | undefined>
-): Promise<RunRecord[]> {
+export async function listRuns(demoMode: boolean, searchParams?: Partial<ListRunsQuery>): Promise<RunRecord[]> {
   if (demoMode) {
     let runs = [...MOCK_RUNS];
     if (searchParams?.status) runs = runs.filter((run) => run.status === searchParams.status);
+    if (searchParams?.environment)
+      runs = runs.filter((run) => String(run.metadata?.environment ?? '') === searchParams.environment);
+    if (searchParams?.search) {
+      const lower = searchParams.search.toLowerCase();
+      runs = runs.filter((run) => {
+        const haystack = [run.id, run.metadata?.scenarioRef, run.source?.ref, ...(run.tags ?? [])]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(lower);
+      });
+    }
+    if (searchParams?.createdAfter) runs = runs.filter((run) => run.createdAt >= searchParams.createdAfter!);
+    if (searchParams?.createdBefore) runs = runs.filter((run) => run.createdAt <= searchParams.createdBefore!);
+    if (!searchParams?.includeArchived) runs = runs.filter((run) => !run.archivedAt);
+    if (searchParams?.sortBy) {
+      const key = searchParams.sortBy;
+      const order = searchParams.sortOrder === 'asc' ? 1 : -1;
+      runs.sort((a, b) => {
+        const va = key === 'updatedAt' ? (a.endedAt ?? a.createdAt) : a.createdAt;
+        const vb = key === 'updatedAt' ? (b.endedAt ?? b.createdAt) : b.createdAt;
+        return va < vb ? -order : va > vb ? order : 0;
+      });
+    }
     return maybeDelay(runs);
   }
 
-  const params: Record<string, string | number | boolean | undefined> = {
-    limit: 200,
-    offset: 0,
-    ...searchParams
-  };
   const query = new URLSearchParams();
-  Object.entries(params ?? {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
-  });
+  query.set('limit', String(searchParams?.limit ?? 200));
+  query.set('offset', String(searchParams?.offset ?? 0));
+  if (searchParams?.status) query.set('status', searchParams.status);
+  if (searchParams?.environment) query.set('environment', searchParams.environment);
+  if (searchParams?.search) query.set('search', searchParams.search);
+  if (searchParams?.scenarioRef) query.set('scenarioRef', searchParams.scenarioRef);
+  if (searchParams?.sortBy) query.set('sortBy', searchParams.sortBy);
+  if (searchParams?.sortOrder) query.set('sortOrder', searchParams.sortOrder);
+  if (searchParams?.createdAfter) query.set('createdAfter', searchParams.createdAfter);
+  if (searchParams?.createdBefore) query.set('createdBefore', searchParams.createdBefore);
+  if (searchParams?.includeArchived) query.set('includeArchived', 'true');
+  if (searchParams?.tags?.length) query.set('tags', searchParams.tags.join(','));
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const res = await fetchJson<{ data: Record<string, unknown>[]; total: number }>('control-plane', `/runs${suffix}`);
   return res.data.map(normalizeRun);
@@ -384,9 +417,25 @@ export async function getRuntimeHealth(demoMode: boolean): Promise<RuntimeHealth
   return fetchJson<RuntimeHealth>('control-plane', '/runtime/health');
 }
 
-export async function getAuditLogs(demoMode: boolean, limit = 100, offset = 0): Promise<AuditListResponse> {
-  if (demoMode) return maybeDelay({ data: MOCK_AUDIT_LOGS, total: MOCK_AUDIT_LOGS.length });
-  return fetchJson<AuditListResponse>('control-plane', `/audit?limit=${limit}&offset=${offset}`);
+export async function getAuditLogs(demoMode: boolean, query?: Partial<ListAuditQuery>): Promise<AuditListResponse> {
+  if (demoMode) {
+    let data = [...MOCK_AUDIT_LOGS];
+    if (query?.actor) data = data.filter((e) => e.actor.includes(query.actor!));
+    if (query?.action) data = data.filter((e) => e.action === query.action);
+    if (query?.resource) data = data.filter((e) => e.resource === query.resource);
+    return maybeDelay({ data, total: data.length });
+  }
+  const params = new URLSearchParams();
+  if (query?.limit) params.set('limit', String(query.limit));
+  if (query?.offset) params.set('offset', String(query.offset));
+  if (query?.actor) params.set('actor', query.actor);
+  if (query?.action) params.set('action', query.action);
+  if (query?.resource) params.set('resource', query.resource);
+  if (query?.resourceId) params.set('resourceId', query.resourceId);
+  if (query?.createdAfter) params.set('createdAfter', query.createdAfter);
+  if (query?.createdBefore) params.set('createdBefore', query.createdBefore);
+  const suffix = params.toString() ? `?${params.toString()}` : '?limit=100&offset=0';
+  return fetchJson<AuditListResponse>('control-plane', `/audit${suffix}`);
 }
 
 export async function getWebhooks(demoMode: boolean): Promise<WebhookSubscription[]> {
@@ -469,8 +518,9 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
   const activeRuns =
     cpKpis.activeRuns ??
     runs.filter((run) => ['queued', 'starting', 'binding_session', 'running'].includes(run.status)).length;
-  const successRate =
-    totalRuns === 0 ? 0 : (cpKpis.completedRuns ?? runs.filter((run) => run.status === 'completed').length) / totalRuns;
+  const completedRuns = cpKpis.completedRuns ?? runs.filter((run) => run.status === 'completed').length;
+  const failedRuns = cpKpis.failedRuns ?? runs.filter((run) => run.status === 'failed').length;
+  const cancelledRuns = cpKpis.cancelledRuns ?? runs.filter((run) => run.status === 'cancelled').length;
   const averageDurationMs = cpKpis.avgDurationMs ?? 0;
 
   const cpCharts = cpOverview.charts ?? {};
@@ -481,7 +531,9 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
     kpis: {
       totalRuns,
       activeRuns,
-      successRate,
+      completedRuns,
+      failedRuns,
+      cancelledRuns,
       averageDurationMs,
       totalSignals: cpKpis.totalSignals ?? 0,
       totalCostUsd: cpKpis.totalCostUsd ?? cpKpis.estimatedCostUsd ?? 0,
@@ -605,25 +657,37 @@ export async function batchDeleteRuns(runIds: string[], demoMode: boolean): Prom
 
 /* ─── Run export bundle ─── */
 
-export async function exportRunBundle(runId: string, demoMode: boolean): Promise<RunExportBundle> {
+export async function exportRunBundle(
+  runId: string,
+  demoMode: boolean,
+  query?: ExportRunQuery
+): Promise<RunExportBundle> {
   if (demoMode) {
     const run = MOCK_RUNS.find((r) => r.id === runId) ?? MOCK_RUNS[0];
     return maybeDelay({
       run,
       projection: MOCK_RUN_STATES[runId],
-      events: MOCK_RUN_EVENTS[runId] ?? [],
+      canonicalEvents: MOCK_RUN_EVENTS[runId] ?? [],
+      rawEvents: [],
       artifacts: MOCK_RUN_ARTIFACTS[runId] ?? [],
-      metrics: MOCK_RUN_METRICS[runId]
+      metrics: MOCK_RUN_METRICS[runId],
+      exportedAt: new Date().toISOString()
     });
   }
-  return fetchJson<RunExportBundle>('control-plane', `/runs/${runId}/export`);
+  const params = new URLSearchParams();
+  if (query?.includeCanonical !== undefined) params.set('includeCanonical', String(query.includeCanonical));
+  if (query?.includeRaw !== undefined) params.set('includeRaw', String(query.includeRaw));
+  if (query?.eventLimit !== undefined) params.set('eventLimit', String(query.eventLimit));
+  if (query?.format) params.set('format', query.format);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return fetchJson<RunExportBundle>('control-plane', `/runs/${runId}/export${suffix}`);
 }
 
 /* ─── Webhook update ─── */
 
 export async function updateWebhook(
   id: string,
-  body: { url?: string; events?: string[]; active?: boolean },
+  body: { url?: string; events?: string[]; active?: boolean; secret?: string },
   demoMode: boolean
 ): Promise<WebhookSubscription> {
   if (demoMode) {
@@ -673,13 +737,16 @@ export async function rebuildProjection(runId: string, demoMode: boolean): Promi
 
 /* ─── Readiness probe ─── */
 
-export async function getReadinessProbe(demoMode: boolean) {
+export async function getReadinessProbe(demoMode: boolean): Promise<ReadinessProbeResponse> {
   if (demoMode)
     return maybeDelay({
       ok: true,
-      checks: { database: 'ok', runtime: 'ok' }
+      database: 'ok',
+      runtime: { ok: true, runtimeKind: 'rust', detail: 'Healthy' },
+      streamConsumer: 'ok',
+      circuitBreaker: 'CLOSED'
     });
-  return fetchJson<{ ok: boolean; checks?: Record<string, string> }>('control-plane', '/readyz');
+  return fetchJson<ReadinessProbeResponse>('control-plane', '/readyz');
 }
 
 /* ─── Agent metrics from control plane ─── */
@@ -732,9 +799,11 @@ export async function batchExportRuns(runIds: string[], demoMode: boolean): Prom
       return {
         run,
         projection: MOCK_RUN_STATES[id],
-        events: MOCK_RUN_EVENTS[id] ?? [],
+        canonicalEvents: MOCK_RUN_EVENTS[id] ?? [],
+        rawEvents: [] as Record<string, unknown>[],
         artifacts: MOCK_RUN_ARTIFACTS[id] ?? [],
-        metrics: MOCK_RUN_METRICS[id]
+        metrics: MOCK_RUN_METRICS[id],
+        exportedAt: new Date().toISOString()
       };
     });
     return maybeDelay(bundles);
@@ -750,4 +819,48 @@ export async function batchExportRuns(runIds: string[], demoMode: boolean): Prom
 export async function deleteRun(runId: string, demoMode: boolean): Promise<void> {
   if (demoMode) return maybeDelay(undefined as unknown as void);
   await fetchJson('control-plane', `/runs/${runId}`, { method: 'DELETE' });
+}
+
+/* ─── Runtime policy CRUD ─── */
+
+export async function listRuntimePolicies(demoMode: boolean, mode?: string): Promise<RuntimePolicyDescriptor[]> {
+  if (demoMode) {
+    let policies = [...MOCK_RUNTIME_POLICIES];
+    if (mode) policies = policies.filter((p) => p.mode === mode);
+    return maybeDelay(policies);
+  }
+  const suffix = mode ? `?mode=${encodeURIComponent(mode)}` : '';
+  return fetchJson<RuntimePolicyDescriptor[]>('control-plane', `/runtime/policies${suffix}`);
+}
+
+export async function getRuntimePolicy(policyId: string, demoMode: boolean): Promise<RuntimePolicyDescriptor> {
+  if (demoMode) {
+    const policy = MOCK_RUNTIME_POLICIES.find((p) => p.policyId === policyId);
+    if (!policy) throw new Error(`Unknown mock policy: ${policyId}`);
+    return maybeDelay(policy);
+  }
+  return fetchJson<RuntimePolicyDescriptor>('control-plane', `/runtime/policies/${encodeURIComponent(policyId)}`);
+}
+
+export async function registerRuntimePolicy(
+  body: RegisterPolicyRequest,
+  demoMode: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  if (demoMode) return maybeDelay({ ok: true });
+  return fetchJson<{ ok: boolean; error?: string }>('control-plane', '/runtime/policies', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+}
+
+export async function unregisterRuntimePolicy(
+  policyId: string,
+  demoMode: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  if (demoMode) return maybeDelay({ ok: true });
+  return fetchJson<{ ok: boolean; error?: string }>(
+    'control-plane',
+    `/runtime/policies/${encodeURIComponent(policyId)}`,
+    { method: 'DELETE' }
+  );
 }

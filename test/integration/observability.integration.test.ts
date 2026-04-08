@@ -304,7 +304,9 @@ describe('Observability (integration)', () => {
       const result = await getReadinessProbe(false);
 
       expect(result.ok).toBe(true);
-      expect(result.checks).toEqual({ database: 'ok', runtime: 'ok' });
+      expect(result.database).toBe('ok');
+      expect(result.streamConsumer).toBe('ok');
+      expect(result.circuitBreaker).toBe('CLOSED');
     });
 
     it('resetCircuitBreaker sends POST', async () => {
@@ -407,9 +409,9 @@ describe('Observability (integration)', () => {
       const result = await getReadinessProbe(false);
 
       expect(result.ok).toBe(true);
-      expect(result.checks).toHaveProperty('database', 'ok');
-      expect(result.checks).toHaveProperty('runtime', 'ok');
-      expect(result.checks).toHaveProperty('messageQueue', 'ok');
+      expect(result.database).toBe('ok');
+      expect(result.streamConsumer).toBe('ok');
+      expect(result.circuitBreaker).toBe('CLOSED');
     });
   });
 

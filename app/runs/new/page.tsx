@@ -487,6 +487,22 @@ function NewRunPageContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="stack">
+            {bootstrapResult && typeof bootstrapResult === 'object' && 'controlPlane' in bootstrapResult && (
+              <div className="inline-list">
+                {(bootstrapResult as { controlPlane?: { policyRegistered?: boolean; policyVersion?: string } })
+                  .controlPlane?.policyRegistered && (
+                  <Badge
+                    label={`Policy registered: ${(bootstrapResult as { controlPlane: { policyVersion?: string } }).controlPlane.policyVersion ?? 'unknown'}`}
+                    tone="success"
+                  />
+                )}
+                {(bootstrapResult as { controlPlane?: { policyVersion?: string } }).controlPlane?.policyVersion &&
+                  (bootstrapResult as { controlPlane?: { policyVersion?: string } }).controlPlane?.policyVersion !==
+                    'policy.default' &&
+                  !(bootstrapResult as { controlPlane?: { policyRegistered?: boolean } }).controlPlane
+                    ?.policyRegistered && <Badge label="Policy registration skipped" tone="warning" />}
+              </div>
+            )}
             <JsonViewer
               value={{ validationResult: validationResult ?? null, bootstrapResult: bootstrapResult ?? null }}
             />

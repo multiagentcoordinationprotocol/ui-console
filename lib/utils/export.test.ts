@@ -271,6 +271,7 @@ describe('exportTraceBundle', () => {
       signals: { signals: [] },
       progress: { entries: [] },
       timeline: { latestSeq: 1, totalEvents: 1, recent: [] },
+      policy: { policyVersion: 'policy.default', commitmentEvaluations: [] },
       trace: { spanCount: 0, linkedArtifacts: [] },
       outboundMessages: { total: 0, queued: 0, accepted: 0, rejected: 0 }
     };
@@ -295,7 +296,7 @@ describe('exportTraceBundle', () => {
 
     expect(parsed.runId).toBe(runId);
     expect(parsed.state).toEqual(state);
-    expect(parsed.events).toEqual(events);
+    expect(parsed.canonicalEvents).toEqual(events);
     expect(parsed.artifacts).toEqual(artifacts);
     expect(parsed.exportedAt).toBe('2026-04-01T12:00:00.000Z');
 

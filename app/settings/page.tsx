@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { FieldLabel, Input, Select } from '@/components/ui/field';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
+import { PolicyManagement } from '@/components/settings/policy-management';
 import {
   createWebhook,
   deleteWebhook,
@@ -40,10 +41,21 @@ export default function SettingsPage() {
   const [webhookUrl, setWebhookUrl] = useState('https://example.com/hooks/macp');
   const [webhookSecret, setWebhookSecret] = useState('change-me');
   const [webhookEvents, setWebhookEvents] = useState('run.completed,run.failed,signal.emitted');
+  const [auditActor, setAuditActor] = useState('');
+  const [auditAction, setAuditAction] = useState('');
+  const [auditResource, setAuditResource] = useState('');
 
   const queryClient = useQueryClient();
   const webhooksQuery = useQuery({ queryKey: ['settings-webhooks', demoMode], queryFn: () => getWebhooks(demoMode) });
-  const auditQuery = useQuery({ queryKey: ['settings-audit', demoMode], queryFn: () => getAuditLogs(demoMode) });
+  const auditQuery = useQuery({
+    queryKey: ['settings-audit', demoMode, auditActor, auditAction, auditResource],
+    queryFn: () =>
+      getAuditLogs(demoMode, {
+        actor: auditActor || undefined,
+        action: auditAction || undefined,
+        resource: auditResource || undefined
+      })
+  });
   const healthQuery = useQuery({ queryKey: ['settings-health', demoMode], queryFn: () => getRuntimeHealth(demoMode) });
 
   const createWebhookMutation = useMutation({
@@ -319,7 +331,39 @@ export default function SettingsPage() {
             <CardTitle>Audit trail</CardTitle>
             <CardDescription>Recent administrative actions routed through the control plane.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="stack">
+            <div className="grid-3">
+              <div>
+                <FieldLabel>Actor</FieldLabel>
+                <Input
+                  value={auditActor}
+                  onChange={(e) => setAuditActor(e.target.value)}
+                  placeholder="Filter by actor"
+                />
+              </div>
+              <div>
+                <FieldLabel>Action</FieldLabel>
+                <Select value={auditAction} onChange={(e) => setAuditAction(e.target.value)}>
+                  <option value="">All actions</option>
+                  <option value="run.create">run.create</option>
+                  <option value="run.archive">run.archive</option>
+                  <option value="run.cancel">run.cancel</option>
+                  <option value="run.delete">run.delete</option>
+                  <option value="webhook.create">webhook.create</option>
+                  <option value="webhook.delete">webhook.delete</option>
+                  <option value="circuit_breaker.reset">circuit_breaker.reset</option>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel>Resource</FieldLabel>
+                <Select value={auditResource} onChange={(e) => setAuditResource(e.target.value)}>
+                  <option value="">All resources</option>
+                  <option value="run">run</option>
+                  <option value="webhook">webhook</option>
+                  <option value="circuit-breaker">circuit-breaker</option>
+                </Select>
+              </div>
+            </div>
             <div className="timeline-list">
               {(auditQuery.data?.data ?? []).slice(0, 10).map((entry, index) => (
                 <div key={`${entry.action}-${index}`} className="timeline-item">
@@ -337,6 +381,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+      <PolicyManagement demoMode={demoMode} />
     </div>
   );
 }

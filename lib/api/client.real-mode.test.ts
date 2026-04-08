@@ -687,8 +687,8 @@ describe('real mode API client', () => {
       const result = await getReadinessProbe(REAL);
 
       expect(result).toHaveProperty('ok', true);
-      expect(result).toHaveProperty('checks');
-      expect(result.checks).toHaveProperty('database', 'ok');
+      expect(result).toHaveProperty('database');
+      expect(result.database).toBe('ok');
     });
   });
 
@@ -703,7 +703,7 @@ describe('real mode API client', () => {
       }));
 
       const { getAuditLogs } = await import('@/lib/api/client');
-      const result = await getAuditLogs(REAL, 50, 10);
+      const result = await getAuditLogs(REAL, { limit: 50, offset: 10 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('total', 2);

@@ -454,9 +454,11 @@ describe('Runs Lifecycle (integration)', () => {
         body: {
           run: runRecord(RUN_ID_1),
           projection: runStateProjection(RUN_ID_1),
-          events: [],
+          canonicalEvents: [],
+          rawEvents: [],
           artifacts: [],
-          metrics: { runId: RUN_ID_1, eventCount: 0, messageCount: 0 }
+          metrics: { runId: RUN_ID_1, eventCount: 0, messageCount: 0 },
+          exportedAt: new Date().toISOString()
         }
       }));
 
@@ -465,7 +467,7 @@ describe('Runs Lifecycle (integration)', () => {
 
       expect(bundle.run).toBeDefined();
       expect(bundle.projection).toBeDefined();
-      expect(bundle.events).toEqual([]);
+      expect(bundle.canonicalEvents).toEqual([]);
     });
   });
 
@@ -554,7 +556,7 @@ describe('Runs Lifecycle (integration)', () => {
       expect(bundles).toHaveLength(2);
       expect(bundles[0]).toHaveProperty('run');
       expect(bundles[0]).toHaveProperty('projection');
-      expect(bundles[0]).toHaveProperty('events');
+      expect(bundles[0]).toHaveProperty('canonicalEvents');
       expect(bundles[0]).toHaveProperty('metrics');
 
       const postBody = mocker.requests.at(-1)!.body as Record<string, unknown>;
@@ -604,7 +606,7 @@ describe('Runs Lifecycle (integration)', () => {
       }));
 
       const { getAuditLogs } = await import('@/lib/api/client');
-      await getAuditLogs(false, 50, 10);
+      await getAuditLogs(false, { limit: 50, offset: 10 });
 
       const lastReq = mocker.requests.at(-1)!;
       expect(lastReq.url).toContain('limit=50');

@@ -26,6 +26,7 @@ interface FlowNodeData extends Record<string, unknown> {
   selected?: boolean;
   summary?: string;
   meta?: string[];
+  outcomePositive?: boolean;
 }
 
 const kindIcons: Record<string, ComponentType<{ size?: number }>> = {
@@ -42,7 +43,18 @@ const RunGraphNode = memo(function RunGraphNode({ data }: NodeProps<Node<FlowNod
   const tone = getStatusTone(data.status);
 
   return (
-    <div className={`flow-node-card ${data.selected ? 'flow-node-card-selected' : ''}`}>
+    <div
+      className={`flow-node-card ${data.selected ? 'flow-node-card-selected' : ''}`}
+      style={
+        data.kind === 'decision' && data.outcomePositive !== undefined
+          ? {
+              borderLeftWidth: 3,
+              borderLeftStyle: 'solid',
+              borderLeftColor: data.outcomePositive ? 'var(--color-success)' : 'var(--color-danger)'
+            }
+          : undefined
+      }
+    >
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <div className="flow-node-title">
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -150,7 +162,8 @@ export function ExecutionGraph({
             participant?.role ? `Role: ${participant.role}` : '',
             latestProgress?.percentage !== undefined ? `Progress: ${latestProgress.percentage}%` : '',
             signalCount > 0 ? `Signals: ${signalCount}` : ''
-          ].filter(Boolean)
+          ].filter(Boolean),
+          outcomePositive: node.kind === 'decision' ? state.decision.current?.outcomePositive : undefined
         }
       } satisfies Node<FlowNodeData>;
     });

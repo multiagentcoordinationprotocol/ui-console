@@ -160,6 +160,7 @@ export function dashboardOverview() {
       activeRuns: 3,
       completedRuns: 35,
       failedRuns: 4,
+      cancelledRuns: 0,
       avgDurationMs: 8500,
       totalSignals: 120,
       totalTokens: 84200,
@@ -261,7 +262,13 @@ export function createRunResponse(runId = RUN_ID_1) {
 }
 
 export function readinessProbe() {
-  return { ok: true, checks: { database: 'ok', runtime: 'ok' } };
+  return {
+    ok: true,
+    database: 'ok',
+    runtime: { ok: true, runtimeKind: 'rust', detail: 'Healthy' },
+    streamConsumer: 'ok',
+    circuitBreaker: 'CLOSED'
+  };
 }
 
 /* ─── Example-service responses ─── */
@@ -416,9 +423,11 @@ export function batchExportResponse(runIds: string[]) {
   return runIds.map((id) => ({
     run: runRecord(id, { status: 'completed' }),
     projection: runStateProjection(id),
-    events: canonicalEvents(id, 2),
+    canonicalEvents: canonicalEvents(id, 2),
+    rawEvents: [],
     artifacts: artifactsList(id),
-    metrics: metricsSummary(id)
+    metrics: metricsSummary(id),
+    exportedAt: new Date().toISOString()
   }));
 }
 
@@ -452,7 +461,10 @@ export function prometheusMetrics() {
 export function readinessProbeResponse() {
   return {
     ok: true,
-    checks: { database: 'ok', runtime: 'ok', messageQueue: 'ok' }
+    database: 'ok',
+    runtime: { ok: true, runtimeKind: 'rust', detail: 'Healthy' },
+    streamConsumer: 'ok',
+    circuitBreaker: 'CLOSED'
   };
 }
 

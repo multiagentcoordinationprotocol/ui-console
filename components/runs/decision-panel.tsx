@@ -42,6 +42,18 @@ export function DecisionPanel({ run, state }: { run: RunRecord; state: RunStateP
             <div className="muted small">Finalized</div>
             <div className="metric-box-value">{current?.finalized || run.status === 'completed' ? 'Yes' : 'No'}</div>
           </div>
+          <div className="metric-box">
+            <div className="muted small">Outcome</div>
+            <div className="metric-box-value">
+              {current?.outcomePositive === true ? (
+                <Badge label="Positive outcome" tone="success" />
+              ) : current?.outcomePositive === false ? (
+                <Badge label="Negative outcome" tone="danger" />
+              ) : (
+                <Badge label="Pending" tone="neutral" />
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="list-item">

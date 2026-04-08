@@ -78,6 +78,7 @@ function makeSnapshot(seq: number): RunStateProjection {
     signals: { signals: [] },
     progress: { entries: [] },
     timeline: { latestSeq: seq, totalEvents: seq, recent: [] },
+    policy: { policyVersion: 'policy.default', commitmentEvaluations: [] },
     trace: { spanCount: 0, linkedArtifacts: [] },
     outboundMessages: { total: 0, queued: 0, accepted: 0, rejected: 0 }
   };

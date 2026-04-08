@@ -51,6 +51,12 @@ export function flattenRunForCsv(run: RunRecord): Record<string, unknown> {
   };
 }
 
+export function exportToJsonl(items: unknown[], filename: string) {
+  const lines = items.map((item) => JSON.stringify(item)).join('\n');
+  const blob = new Blob([lines], { type: 'application/x-ndjson' });
+  downloadBlob(blob, filename);
+}
+
 export function exportTraceBundle(
   runId: string,
   events: CanonicalEvent[],
@@ -58,5 +64,5 @@ export function exportTraceBundle(
   artifacts: Artifact[],
   filename: string
 ) {
-  exportToJson({ runId, state, events, artifacts, exportedAt: new Date().toISOString() }, filename);
+  exportToJson({ runId, state, canonicalEvents: events, artifacts, exportedAt: new Date().toISOString() }, filename);
 }

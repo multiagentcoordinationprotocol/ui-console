@@ -1,7 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { Activity, AlertTriangle, Database, HeartPulse, ShieldCheck } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Activity, AlertTriangle, Database, ExternalLink, HeartPulse, RotateCcw, ShieldCheck } from 'lucide-react';
 import { LineChartCard } from '@/components/charts/line-chart-card';
 import { BarChartCard } from '@/components/charts/bar-chart-card';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -16,8 +16,10 @@ import {
   getRuntimeHealth,
   getRuntimeManifest,
   getRuntimeModes,
-  getRuntimeRoots
+  getRuntimeRoots,
+  resetCircuitBreaker
 } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 
 export default function ObservabilityPage() {
@@ -39,6 +41,7 @@ export default function ObservabilityPage() {
   });
   const auditQuery = useQuery({ queryKey: ['observability-audit', demoMode], queryFn: () => getAuditLogs(demoMode) });
   const readinessQuery = useQuery({ queryKey: ['readiness', demoMode], queryFn: () => getReadinessProbe(demoMode) });
+  const resetBreakerMutation = useMutation({ mutationFn: () => resetCircuitBreaker(demoMode) });
 
   if (overviewQuery.isLoading || healthQuery.isLoading) {
     return (
@@ -198,17 +201,33 @@ export default function ObservabilityPage() {
             <HeartPulse size={18} /> Readiness probe
           </CardTitle>
           <CardDescription>
-            Live readiness status from the Control Plane, checking database and runtime connectivity.
+            Live readiness status from the Control Plane, checking database, runtime, stream consumer, and circuit
+            breaker.
           </CardDescription>
         </CardHeader>
         <CardContent className="stack">
           <div className="inline-list">
             <StatusBadge status={readinessQuery.data?.ok ? 'ok' : 'failed'} />
-            {readinessQuery.data?.checks
-              ? Object.entries(readinessQuery.data.checks).map(([key, value]) => (
-                  <Badge key={key} label={`${key}: ${value}`} tone={value === 'ok' ? 'success' : 'danger'} />
-                ))
-              : null}
+            {readinessQuery.data && (
+              <>
+                <Badge
+                  label={`Database: ${readinessQuery.data.database}`}
+                  tone={readinessQuery.data.database === 'ok' ? 'success' : 'danger'}
+                />
+                <Badge
+                  label={`Stream: ${readinessQuery.data.streamConsumer}`}
+                  tone={readinessQuery.data.streamConsumer === 'ok' ? 'success' : 'danger'}
+                />
+                <Badge
+                  label={`Circuit breaker: ${readinessQuery.data.circuitBreaker}`}
+                  tone={readinessQuery.data.circuitBreaker === 'CLOSED' ? 'success' : 'danger'}
+                />
+                <Badge
+                  label={`Runtime: ${readinessQuery.data.runtime?.ok ? 'healthy' : 'degraded'}`}
+                  tone={readinessQuery.data.runtime?.ok ? 'success' : 'danger'}
+                />
+              </>
+            )}
           </div>
           {readinessQuery.data ? <JsonViewer value={readinessQuery.data} /> : null}
         </CardContent>
@@ -227,6 +246,54 @@ export default function ObservabilityPage() {
           <JsonViewer value={health} />
         </CardContent>
       </Card>
+
+      <div className="grid-2">
+        <Card>
+          <CardHeader>
+            <CardTitle style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <RotateCcw size={18} /> Circuit breaker
+            </CardTitle>
+            <CardDescription>Reset the control plane circuit breaker if runtime connections are stuck.</CardDescription>
+          </CardHeader>
+          <CardContent className="stack">
+            <div className="inline-list">
+              <Badge
+                label={readinessQuery.data?.circuitBreaker ?? 'unknown'}
+                tone={readinessQuery.data?.circuitBreaker === 'CLOSED' ? 'success' : 'danger'}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => resetBreakerMutation.mutate()}
+              disabled={resetBreakerMutation.isPending}
+            >
+              <RotateCcw size={14} />
+              {resetBreakerMutation.isPending ? 'Resetting...' : 'Reset circuit breaker'}
+            </Button>
+            {resetBreakerMutation.data ? <JsonViewer value={resetBreakerMutation.data} /> : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <ExternalLink size={18} /> External tools
+            </CardTitle>
+            <CardDescription>Links to external monitoring infrastructure.</CardDescription>
+          </CardHeader>
+          <CardContent className="stack">
+            <a
+              href="/api/proxy/control-plane/metrics"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button button-secondary"
+            >
+              <ExternalLink size={14} />
+              Open raw Prometheus metrics
+            </a>
+          </CardContent>
+        </Card>
+      </div>
 
       {!health.ok ? (
         <div className="empty-state compact">
