@@ -20,6 +20,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   ci:
     name: Lint, Type-check, Test, Build
@@ -35,9 +39,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@multiagentcoordinationprotocol'
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check formatting
         run: npm run format:check
@@ -89,9 +97,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@multiagentcoordinationprotocol'
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run integration tests
         run: npm run test:integration
@@ -128,10 +140,14 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: ui-console/package-lock.json
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@multiagentcoordinationprotocol'
 
       - name: Install dependencies
         working-directory: ui-console
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright Chromium
         working-directory: ui-console
