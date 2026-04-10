@@ -1,5 +1,25 @@
 import type { ProxyService } from '@/lib/server/integrations';
 
+export class ApiError extends Error {
+  readonly status: number;
+  readonly statusText: string;
+  readonly service: ProxyService;
+  readonly path: string;
+
+  constructor(status: number, statusText: string, body: string, service: ProxyService, path: string) {
+    super(body || `Request failed with status ${status}`);
+    this.name = 'ApiError';
+    this.status = status;
+    this.statusText = statusText;
+    this.service = service;
+    this.path = path;
+  }
+
+  get isNotFound(): boolean {
+    return this.status === 404;
+  }
+}
+
 export async function fetchJson<T>(service: ProxyService, path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/proxy/${service}${path}`, {
     ...init,
@@ -12,11 +32,11 @@ export async function fetchJson<T>(service: ProxyService, path: string, init?: R
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Request failed with status ${response.status}`);
+    throw new ApiError(response.status, response.statusText, message, service, path);
   }
 
   if (response.status === 204) {
-    return undefined as T;
+    return undefined as unknown as T;
   }
 
   return (await response.json()) as T;

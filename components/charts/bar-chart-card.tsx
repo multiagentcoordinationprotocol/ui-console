@@ -3,6 +3,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ChartPoint } from '@/lib/types';
+import { formatChartLabel } from '@/lib/utils/format';
 
 export function BarChartCard({ title, data, height = 260 }: { title: string; data: ChartPoint[]; height?: number }) {
   return (
@@ -15,7 +16,13 @@ export function BarChartCard({ title, data, height = 260 }: { title: string; dat
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="4 4" stroke="rgba(148,163,184,0.12)" />
-              <XAxis dataKey="label" stroke="rgba(148,163,184,0.7)" tickLine={false} axisLine={false} />
+              <XAxis
+                dataKey="label"
+                stroke="rgba(148,163,184,0.7)"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: string) => formatChartLabel(v)}
+              />
               <YAxis stroke="rgba(148,163,184,0.7)" tickLine={false} axisLine={false} />
               <Tooltip />
               <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="var(--brand)" />

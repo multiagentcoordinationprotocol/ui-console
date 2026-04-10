@@ -5,6 +5,7 @@ import {
   formatNumber,
   formatPercent,
   formatCurrency,
+  formatChartLabel,
   titleCase,
   truncate,
   getStatusTone
@@ -35,6 +36,15 @@ describe('formatDateTime', () => {
   it('formats a numeric timestamp', () => {
     const result = formatDateTime(1700000000000);
     expect(result).toContain('2023');
+  });
+
+  it('formats with explicit UTC timezone', () => {
+    const result = formatDateTime('2025-07-20T14:30:00Z', 'UTC');
+    expect(result).toContain('Jul');
+    expect(result).toContain('20');
+    expect(result).toContain('2025');
+    expect(result).toContain('2:30');
+    expect(result).toContain('PM');
   });
 });
 
@@ -142,6 +152,42 @@ describe('truncate', () => {
     const result = truncate(longStr);
     expect(result.length).toBe(120);
     expect(result.endsWith('…')).toBe(true);
+  });
+});
+
+describe('formatChartLabel', () => {
+  it('formats ISO timestamp to short date string', () => {
+    const result = formatChartLabel('2026-04-01T10:00:00Z');
+    expect(result).toContain('Apr');
+    expect(result).toContain('1');
+  });
+
+  it('returns plain string labels unchanged', () => {
+    expect(formatChartLabel('Mon')).toBe('Mon');
+    expect(formatChartLabel('timeout')).toBe('timeout');
+    expect(formatChartLabel('Week 1')).toBe('Week 1');
+  });
+
+  it('returns non-ISO date-like strings unchanged', () => {
+    expect(formatChartLabel('April 1')).toBe('April 1');
+    expect(formatChartLabel('2026')).toBe('2026');
+  });
+
+  it('handles ISO timestamps with different hours', () => {
+    const morning = formatChartLabel('2026-06-15T08:00:00Z');
+    expect(morning).toContain('Jun');
+    expect(morning).toContain('15');
+
+    const evening = formatChartLabel('2026-12-25T23:30:00Z');
+    expect(evening).toContain('Dec');
+    expect(evening).toContain('25');
+  });
+
+  it('formats with explicit UTC timezone', () => {
+    const result = formatChartLabel('2026-03-10T16:00:00Z', 'UTC');
+    expect(result).toContain('Mar');
+    expect(result).toContain('10');
+    expect(result).toContain('4');
   });
 });
 

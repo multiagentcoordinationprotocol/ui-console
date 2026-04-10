@@ -3,6 +3,7 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ChartPoint } from '@/lib/types';
+import { formatChartLabel } from '@/lib/utils/format';
 
 export function LineChartCard({
   title,
@@ -27,7 +28,13 @@ export function LineChartCard({
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="4 4" stroke="rgba(148,163,184,0.12)" />
-              <XAxis dataKey="label" stroke="rgba(148,163,184,0.7)" tickLine={false} axisLine={false} />
+              <XAxis
+                dataKey="label"
+                stroke="rgba(148,163,184,0.7)"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: string) => formatChartLabel(v)}
+              />
               <YAxis stroke="rgba(148,163,184,0.7)" tickLine={false} axisLine={false} />
               <Tooltip />
               <Line type="monotone" dataKey={dataKey} stroke="var(--brand)" strokeWidth={2.5} dot={false} />

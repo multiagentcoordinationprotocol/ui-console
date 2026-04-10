@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ArrowRightLeft, Clock4, Download, History, Play } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { ArrowRightLeft, Clock4, Download, History, Play, RotateCcw } from 'lucide-react';
 import { RunsTable } from '@/components/runs/runs-table';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,25 +16,67 @@ import { usePreferencesStore } from '@/lib/stores/preferences-store';
 import { formatCurrency, formatNumber, formatRelativeDuration } from '@/lib/utils/format';
 import { exportToCsv, exportToJson, flattenRunForCsv } from '@/lib/utils/export';
 import { getRunDurationMs } from '@/lib/utils/macp';
+import type { ListRunsQuery } from '@/lib/types';
 
-export default function RunHistoryPage() {
+function RunHistoryContent() {
   const demoMode = usePreferencesStore((state) => state.demoMode);
-  const [status, setStatus] = useState('all');
-  const [environment, setEnvironment] = useState('all');
-  const [search, setSearch] = useState('');
-  const runsQuery = useQuery({ queryKey: ['runs', demoMode], queryFn: () => listRuns(demoMode) });
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const status = searchParams.get('status') ?? 'all';
+  const environment = searchParams.get('environment') ?? 'all';
+  const search = searchParams.get('search') ?? '';
+  const sortBy = (searchParams.get('sortBy') as ListRunsQuery['sortBy']) ?? 'createdAt';
+  const sortOrder = (searchParams.get('sortOrder') as ListRunsQuery['sortOrder']) ?? 'desc';
+  const createdAfter = searchParams.get('createdAfter') ?? '';
+  const createdBefore = searchParams.get('createdBefore') ?? '';
+  const includeArchived = searchParams.get('includeArchived') === 'true';
+  const scenarioRef = searchParams.get('scenarioRef') ?? '';
+
+  const setFilter = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (!value || value === 'all') params.delete(key);
+      else params.set(key, value);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
+
+  const clearFilters = useCallback(() => {
+    router.replace('/runs', { scroll: false });
+  }, [router]);
+
+  const hasActiveFilters =
+    status !== 'all' ||
+    environment !== 'all' ||
+    search ||
+    createdAfter ||
+    createdBefore ||
+    includeArchived ||
+    scenarioRef;
+
+  const serverParams = useMemo<Partial<ListRunsQuery>>(() => {
+    const params: Partial<ListRunsQuery> = { sortBy, sortOrder };
+    if (status !== 'all') params.status = status as ListRunsQuery['status'];
+    if (environment !== 'all') params.environment = environment;
+    if (search.trim()) params.search = search.trim();
+    if (createdAfter) params.createdAfter = createdAfter;
+    if (createdBefore) params.createdBefore = createdBefore;
+    if (includeArchived) params.includeArchived = true;
+    if (scenarioRef.trim()) params.scenarioRef = scenarioRef.trim();
+    return params;
+  }, [status, environment, search, sortBy, sortOrder, createdAfter, createdBefore, includeArchived, scenarioRef]);
+
+  const runsQuery = useQuery({
+    queryKey: ['runs', demoMode, serverParams],
+    queryFn: () => listRuns(demoMode, serverParams)
+  });
 
   const filteredRuns = useMemo(() => {
-    const lower = search.toLowerCase();
-    return (runsQuery.data ?? []).filter((run) => {
-      const matchesStatus = status === 'all' || run.status === status;
-      const matchesEnv = environment === 'all' || String(run.metadata?.environment ?? '') === environment;
-      const haystack = [run.id, run.metadata?.scenarioRef, run.source?.ref, ...(run.tags ?? [])]
-        .join(' ')
-        .toLowerCase();
-      return matchesStatus && matchesEnv && haystack.includes(lower);
-    });
-  }, [environment, runsQuery.data, search, status]);
+    if (!demoMode) return runsQuery.data ?? [];
+    return runsQuery.data ?? [];
+  }, [demoMode, runsQuery.data]);
 
   const aggregate = useMemo(() => {
     const totalCost = filteredRuns.reduce((sum, run) => sum + Number(run.metadata?.estimatedCostUsd ?? 0), 0);
@@ -43,6 +86,15 @@ export default function RunHistoryPage() {
       : 0;
     return { totalCost, totalTokens, averageDuration };
   }, [filteredRuns]);
+
+  const environments = useMemo(() => {
+    const envs = new Set<string>();
+    for (const run of runsQuery.data ?? []) {
+      const env = String(run.metadata?.environment ?? '');
+      if (env) envs.add(env);
+    }
+    return Array.from(envs).sort();
+  }, [runsQuery.data]);
 
   if (runsQuery.isLoading)
     return (
@@ -122,36 +174,100 @@ export default function RunHistoryPage() {
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            Slice by run status, environment, or search terms embedded in scenario refs and tags.
+            Slice by run status, environment, date range, or search terms embedded in scenario refs and tags.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid-3">
-          <div>
-            <label className="field-label">Search</label>
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="run id, scenario ref, tag..."
-            />
+        <CardContent className="stack">
+          <div className="grid-3">
+            <div>
+              <label className="field-label">Search</label>
+              <Input
+                value={search}
+                onChange={(event) => setFilter('search', event.target.value)}
+                placeholder="run id, scenario ref, tag..."
+              />
+            </div>
+            <div>
+              <label className="field-label">Status</label>
+              <Select value={status} onChange={(event) => setFilter('status', event.target.value)}>
+                <option value="all">All statuses</option>
+                <option value="running">Running</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="cancelled">Cancelled</option>
+              </Select>
+            </div>
+            <div>
+              <label className="field-label">Environment</label>
+              <Select value={environment} onChange={(event) => setFilter('environment', event.target.value)}>
+                <option value="all">All environments</option>
+                {environments.map((env) => (
+                  <option key={env} value={env}>
+                    {env}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
-          <div>
-            <label className="field-label">Status</label>
-            <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="running">Running</option>
-              <option value="completed">Completed</option>
-              <option value="failed">Failed</option>
-              <option value="cancelled">Cancelled</option>
-            </Select>
+          <div className="grid-4">
+            <div>
+              <label className="field-label">Sort by</label>
+              <Select value={sortBy} onChange={(event) => setFilter('sortBy', event.target.value)}>
+                <option value="createdAt">Created at</option>
+                <option value="updatedAt">Updated at</option>
+              </Select>
+            </div>
+            <div>
+              <label className="field-label">Order</label>
+              <Select value={sortOrder} onChange={(event) => setFilter('sortOrder', event.target.value)}>
+                <option value="desc">Newest first</option>
+                <option value="asc">Oldest first</option>
+              </Select>
+            </div>
+            <div>
+              <label className="field-label">Created after</label>
+              <Input
+                type="date"
+                value={createdAfter}
+                onChange={(event) => setFilter('createdAfter', event.target.value)}
+              />
+            </div>
+            <div>
+              <label className="field-label">Created before</label>
+              <Input
+                type="date"
+                value={createdBefore}
+                onChange={(event) => setFilter('createdBefore', event.target.value)}
+              />
+            </div>
           </div>
-          <div>
-            <label className="field-label">Environment</label>
-            <Select value={environment} onChange={(event) => setEnvironment(event.target.value)}>
-              <option value="all">All environments</option>
-              <option value="local-dev">local-dev</option>
-              <option value="stage">stage</option>
-              <option value="prod">prod</option>
-            </Select>
+          <div className="grid-3">
+            <div>
+              <label className="field-label">Scenario ref</label>
+              <Input
+                value={scenarioRef}
+                onChange={(event) => setFilter('scenarioRef', event.target.value)}
+                placeholder="e.g. high-value-new-device"
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <label className="switch-row">
+                <input
+                  type="checkbox"
+                  checked={includeArchived}
+                  onChange={(event) => setFilter('includeArchived', event.target.checked ? 'true' : '')}
+                />
+                <span>Include archived</span>
+              </label>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              {hasActiveFilters && (
+                <button className="button button-ghost" onClick={clearFilters}>
+                  <RotateCcw size={14} />
+                  Clear filters
+                </button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -213,5 +329,20 @@ export default function RunHistoryPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function RunHistoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <LoadingPanel
+          title="Loading run history"
+          description="Fetching historical runs, filters, and analytics aggregates."
+        />
+      }
+    >
+      <RunHistoryContent />
+    </Suspense>
   );
 }

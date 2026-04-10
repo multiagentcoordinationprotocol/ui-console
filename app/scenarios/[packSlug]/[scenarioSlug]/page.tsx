@@ -8,6 +8,8 @@ import { ArrowRight, Play } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { JsonViewer } from '@/components/ui/json-viewer';
+import { PolicyBadge } from '@/components/ui/policy-badge';
+import { PolicyRulesCard } from '@/components/ui/policy-rules-card';
 import { Select } from '@/components/ui/field';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
 import { getLaunchSchema, listScenarios } from '@/lib/api/client';
@@ -106,27 +108,43 @@ function ScenarioDetailContent() {
           <CardTitle>Scenario switches</CardTitle>
           <CardDescription>Swap between versions and templates before moving to run creation.</CardDescription>
         </CardHeader>
-        <CardContent className="field-grid">
-          <div>
-            <label className="field-label">Version</label>
-            <Select value={version} onChange={(event) => setVersion(event.target.value)}>
-              {scenario.versions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </Select>
+        <CardContent className="stack">
+          <div className="field-grid">
+            <div>
+              <label className="field-label">Version</label>
+              <Select value={version} onChange={(event) => setVersion(event.target.value)}>
+                {scenario.versions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="field-label">Template</label>
+              <Select value={template} onChange={(event) => setTemplate(event.target.value)}>
+                {scenario.templates.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
-          <div>
-            <label className="field-label">Template</label>
-            <Select value={template} onChange={(event) => setTemplate(event.target.value)}>
-              {scenario.templates.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
+          {scenario.templates.length > 1 && (
+            <div className="inline-list">
+              {scenario.templates.map((tmpl) => (
+                <button
+                  key={tmpl}
+                  className={`badge ${tmpl === template ? 'badge-info' : 'badge-neutral'}`}
+                  style={{ cursor: 'pointer', border: 'none' }}
+                  onClick={() => setTemplate(tmpl)}
+                >
+                  {tmpl}
+                </button>
               ))}
-            </Select>
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -138,6 +156,7 @@ function ScenarioDetailContent() {
           </CardHeader>
           <CardContent className="stack">
             <div className="inline-list">
+              {schema.launchSummary.policyHints?.type && <PolicyBadge type={schema.launchSummary.policyHints.type} />}
               {(scenario.tags ?? []).map((tag) => (
                 <Badge key={tag} label={tag} />
               ))}
@@ -171,24 +190,32 @@ function ScenarioDetailContent() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Launch summary</CardTitle>
-            <CardDescription>Compiled runtime session defaults derived from Example Service.</CardDescription>
-          </CardHeader>
-          <CardContent className="stack">
-            <JsonViewer value={schema.launchSummary} />
-            <div className="section-actions">
-              <Link
-                href={`/runs/new?pack=${params.packSlug}&scenario=${params.scenarioSlug}&version=${version}&template=${template}`}
-                className="button button-secondary"
-              >
-                Open launch page
-                <ArrowRight size={16} />
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="panel-stack">
+          {schema.launchSummary.policyHints && (
+            <PolicyRulesCard
+              hints={schema.launchSummary.policyHints}
+              policyVersion={schema.launchSummary.policyVersion}
+            />
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Launch summary</CardTitle>
+              <CardDescription>Compiled runtime session defaults derived from Example Service.</CardDescription>
+            </CardHeader>
+            <CardContent className="stack">
+              <JsonViewer value={schema.launchSummary} />
+              <div className="section-actions">
+                <Link
+                  href={`/runs/new?pack=${params.packSlug}&scenario=${params.scenarioSlug}&version=${version}&template=${template}`}
+                  className="button button-secondary"
+                >
+                  Open launch page
+                  <ArrowRight size={16} />
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <div className="grid-2">

@@ -6,15 +6,27 @@ import {
   getDashboardOverview,
   compileLaunch,
   getAgentProfiles,
+  getAgentMetrics,
   getLogsData,
+  getTraceData,
   getWebhooks,
   createWebhook,
   getObservabilityRawMetrics,
   cancelRun,
+  cloneRun,
+  batchExportRuns,
   getRunState,
   getRunEvents,
-  listScenarios
+  getRunMessages,
+  getRunMetrics,
+  getMockFrames,
+  getQuickCompareTarget,
+  listScenarioRefs,
+  listScenarios,
+  getLaunchSchema,
+  createReplay
 } from './client';
+import { LIVE_RUN_ID, COMPLETED_RUN_ID } from '@/lib/data/mock-data';
 
 const DEMO = true;
 
@@ -105,6 +117,36 @@ describe('demo mode API client', () => {
     expect(scenarios[0]).toHaveProperty('scenario');
   });
 
+  it('listScenarios returns scenarios with policyVersion and policyHints', async () => {
+    const scenarios = await listScenarios('fraud', DEMO);
+    expect(scenarios.length).toBeGreaterThan(0);
+    expect(scenarios[0]).toHaveProperty('policyVersion');
+    expect(scenarios[0].policyHints).toBeDefined();
+    expect(scenarios[0].policyHints!.type).toBeDefined();
+  });
+
+  it('getLaunchSchema returns schema with policyHints in launchSummary', async () => {
+    const schema = await getLaunchSchema('fraud', 'high-value-new-device', '1.0.0', 'default', DEMO);
+    expect(schema).toHaveProperty('launchSummary');
+    expect(schema.launchSummary.policyHints).toBeDefined();
+    expect(schema.launchSummary.policyHints!.type).toBeDefined();
+  });
+
+  it('getRunState returns state with policy projection', async () => {
+    const state = await getRunState(COMPLETED_RUN_ID, DEMO);
+    expect(state.policy).toBeDefined();
+    expect(state.policy!.policyVersion).toBeDefined();
+    expect(Array.isArray(state.policy!.commitmentEvaluations)).toBe(true);
+  });
+
+  it('getRunMetrics returns token usage fields', async () => {
+    const metrics = await getRunMetrics(COMPLETED_RUN_ID, DEMO);
+    expect(typeof metrics.promptTokens).toBe('number');
+    expect(typeof metrics.completionTokens).toBe('number');
+    expect(typeof metrics.totalTokens).toBe('number');
+    expect(typeof metrics.estimatedCostUsd).toBe('number');
+  });
+
   it('getLogsData returns events for specific runId', async () => {
     const runs = await listRuns(DEMO);
     const events = await getLogsData(DEMO, runs[0].id);
@@ -126,6 +168,104 @@ describe('demo mode API client', () => {
   });
 
   it('getObservabilityRawMetrics returns prometheus string', async () => {
+    const metrics = await getObservabilityRawMetrics(DEMO);
+    expect(typeof metrics).toBe('string');
+    expect(metrics.length).toBeGreaterThan(0);
+  });
+
+  it('getAgentMetrics returns mock agent metrics in demo mode', async () => {
+    const metrics = await getAgentMetrics(DEMO);
+    expect(Array.isArray(metrics)).toBe(true);
+    expect(metrics.length).toBeGreaterThan(0);
+    expect(metrics[0]).toHaveProperty('agentRef');
+    expect(metrics[0]).toHaveProperty('runs');
+    expect(metrics[0]).toHaveProperty('signals');
+    expect(metrics[0]).toHaveProperty('messages');
+    expect(metrics[0]).toHaveProperty('averageConfidence');
+  });
+
+  it('cloneRun returns a new run response in demo mode', async () => {
+    const result = await cloneRun('any-run-id', DEMO);
+    expect(result).toHaveProperty('runId');
+    expect(result).toHaveProperty('status', 'running');
+  });
+
+  it('cloneRun accepts overrides parameter', async () => {
+    const result = await cloneRun('any-run-id', DEMO, {
+      tags: ['cloned', 'test'],
+      context: { override: true }
+    });
+    expect(result).toHaveProperty('runId');
+  });
+
+  it('batchExportRuns returns bundles for each run', async () => {
+    const runs = await listRuns(DEMO);
+    const ids = runs.slice(0, 2).map((r) => r.id);
+    const bundles = await batchExportRuns(ids, DEMO);
+    expect(Array.isArray(bundles)).toBe(true);
+    expect(bundles).toHaveLength(ids.length);
+    expect(bundles[0]).toHaveProperty('run');
+  });
+
+  it('getRunMessages returns mock messages array', async () => {
+    const runs = await listRuns(DEMO);
+    const messages = await getRunMessages(runs[0].id, DEMO);
+    expect(Array.isArray(messages)).toBe(true);
+  });
+
+  it('getLogsData with runId returns events for that run', async () => {
+    const runs = await listRuns(DEMO);
+    const events = await getLogsData(DEMO, runs[0].id);
+    expect(Array.isArray(events)).toBe(true);
+  });
+
+  it('getLogsData without runId returns all events', async () => {
+    const events = await getLogsData(DEMO);
+    expect(Array.isArray(events)).toBe(true);
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('getTraceData with runId returns artifacts for that run', async () => {
+    const runs = await listRuns(DEMO);
+    const artifacts = await getTraceData(DEMO, runs[0].id);
+    expect(Array.isArray(artifacts)).toBe(true);
+  });
+
+  it('getTraceData without runId returns all artifacts', async () => {
+    const artifacts = await getTraceData(DEMO);
+    expect(Array.isArray(artifacts)).toBe(true);
+    expect(artifacts.length).toBeGreaterThan(0);
+  });
+
+  it('getMockFrames returns array of frames', () => {
+    const frames = getMockFrames(LIVE_RUN_ID);
+    expect(Array.isArray(frames)).toBe(true);
+  });
+
+  it('getQuickCompareTarget returns COMPLETED_RUN_ID for LIVE_RUN_ID', () => {
+    expect(getQuickCompareTarget(LIVE_RUN_ID)).toBe(COMPLETED_RUN_ID);
+  });
+
+  it('getQuickCompareTarget returns LIVE_RUN_ID for COMPLETED_RUN_ID', () => {
+    expect(getQuickCompareTarget(COMPLETED_RUN_ID)).toBe(LIVE_RUN_ID);
+  });
+
+  it('listScenarioRefs returns array of scenario reference strings', () => {
+    const refs = listScenarioRefs();
+    expect(Array.isArray(refs)).toBe(true);
+    expect(refs.length).toBeGreaterThan(0);
+    refs.forEach((ref) => expect(ref).toContain('@'));
+  });
+
+  it('createReplay returns a ReplayDescriptor', async () => {
+    const descriptor = await createReplay(COMPLETED_RUN_ID, DEMO);
+    expect(descriptor).toHaveProperty('runId');
+    expect(descriptor).toHaveProperty('mode');
+    expect(descriptor).toHaveProperty('streamUrl');
+    expect(descriptor).toHaveProperty('stateUrl');
+  });
+
+  it('getObservabilityRawMetrics returns a non-empty string', async () => {
     const metrics = await getObservabilityRawMetrics(DEMO);
     expect(typeof metrics).toBe('string');
     expect(metrics.length).toBeGreaterThan(0);

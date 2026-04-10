@@ -1,20 +1,45 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/field';
+import { JsonViewer } from '@/components/ui/json-viewer';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
 import { getLogsData, listRuns } from '@/lib/api/client';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 import { formatDateTime, truncate } from '@/lib/utils/format';
+
+const EVENT_TYPE_GROUPS: Record<string, string[]> = {
+  Run: ['run.created', 'run.started', 'run.completed', 'run.failed', 'run.cancelled'],
+  Session: ['session.opened', 'session.resolved', 'session.expired'],
+  Participant: ['participant.joined', 'participant.left', 'participant.progress'],
+  Message: ['message.sent', 'message.received', 'message.send_failed'],
+  Signal: ['signal.emitted', 'signal.acknowledged'],
+  Proposal: ['proposal.submitted', 'proposal.accepted', 'proposal.rejected'],
+  Decision: ['decision.proposed', 'decision.finalized'],
+  Policy: ['policy.resolved', 'policy.commitment.evaluated', 'policy.denied'],
+  Tool: ['tool.call.started', 'tool.call.completed']
+};
 
 export default function LogsPage() {
   const demoMode = usePreferencesStore((state) => state.demoMode);
   const [runId, setRunId] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const toggleExpand = useCallback((id: string) => setExpandedEventId((prev) => (prev === id ? null : id)), []);
+  const handleRowKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleExpand(id);
+      }
+    },
+    [toggleExpand]
+  );
   const runsQuery = useQuery({ queryKey: ['log-runs', demoMode], queryFn: () => listRuns(demoMode) });
   const effectiveRunId = runId || runsQuery.data?.[0]?.id || '';
 
@@ -24,10 +49,12 @@ export default function LogsPage() {
     enabled: demoMode || Boolean(effectiveRunId)
   });
 
-  const eventTypes = useMemo(
-    () => ['all', ...new Set((logsQuery.data ?? []).map((event) => event.type))],
-    [logsQuery.data]
-  );
+  const eventTypes = useMemo(() => {
+    const dynamicTypes = new Set((logsQuery.data ?? []).map((event) => event.type));
+    const staticTypes = Object.values(EVENT_TYPE_GROUPS).flat();
+    const allTypes = new Set([...staticTypes, ...dynamicTypes]);
+    return ['all', ...allTypes];
+  }, [logsQuery.data]);
 
   const filtered = useMemo(() => {
     const lower = search.toLowerCase();
@@ -87,11 +114,23 @@ export default function LogsPage() {
           <div>
             <label className="field-label">Event type</label>
             <Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              {eventTypes.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
+              <option value="all">all</option>
+              {Object.entries(EVENT_TYPE_GROUPS).map(([group, types]) => (
+                <optgroup key={group} label={group}>
+                  {types.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
+              {eventTypes
+                .filter((t) => t !== 'all' && !Object.values(EVENT_TYPE_GROUPS).flat().includes(t))
+                .map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
             </Select>
           </div>
           <div>
@@ -135,6 +174,7 @@ export default function LogsPage() {
         <table className="table">
           <thead>
             <tr>
+              <th style={{ width: 28 }}></th>
               <th>Seq</th>
               <th>Timestamp</th>
               <th>Type</th>
@@ -144,18 +184,33 @@ export default function LogsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((event) => (
-              <tr key={event.id}>
-                <td>
-                  <Badge label={String(event.seq)} />
-                </td>
-                <td>{formatDateTime(event.ts)}</td>
-                <td>{event.type}</td>
-                <td>{event.subject ? `${event.subject.kind}:${event.subject.id}` : '—'}</td>
-                <td>{event.source.name}</td>
-                <td>{truncate(JSON.stringify(event.data), 180)}</td>
-              </tr>
-            ))}
+            {filtered.map((event) => {
+              const isExpanded = expandedEventId === event.id;
+              return (
+                <tr
+                  key={event.id}
+                  className="expandable-row"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  aria-label={`Event ${event.seq}: ${event.type}. Press Enter to ${isExpanded ? 'collapse' : 'expand'} payload.`}
+                  onClick={() => toggleExpand(event.id)}
+                  onKeyDown={(e) => handleRowKeyDown(e, event.id)}
+                >
+                  <td style={{ color: 'var(--muted)' }}>
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </td>
+                  <td>
+                    <Badge label={String(event.seq)} />
+                  </td>
+                  <td>{formatDateTime(event.ts)}</td>
+                  <td>{event.type}</td>
+                  <td>{event.subject ? `${event.subject.kind}:${event.subject.id}` : '—'}</td>
+                  <td>{event.source.name}</td>
+                  <td>{isExpanded ? <JsonViewer value={event.data} /> : truncate(JSON.stringify(event.data), 180)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

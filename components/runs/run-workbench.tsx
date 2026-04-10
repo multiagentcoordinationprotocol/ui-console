@@ -2,25 +2,34 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pause, Play, RefreshCw } from 'lucide-react';
+import { Copy, Database, Download, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useConfirmation } from '@/lib/hooks/use-confirmation';
+import { useToast } from '@/components/ui/toast';
 import { ExecutionGraph } from '@/components/runs/execution-graph';
 import { LiveEventFeed } from '@/components/runs/live-event-feed';
 import { NodeInspector } from '@/components/runs/node-inspector';
 import { DecisionPanel } from '@/components/runs/decision-panel';
+import { PolicyPanel } from '@/components/runs/policy-panel';
 import { RunOverviewCard } from '@/components/runs/run-overview-card';
+import { SessionInteractionPanel } from '@/components/runs/session-interaction-panel';
 import { SignalRail } from '@/components/runs/signal-rail';
 import { TimelineScrubber } from '@/components/runs/timeline-scrubber';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { FieldLabel, Input, Select, Textarea } from '@/components/ui/field';
 import { JsonViewer } from '@/components/ui/json-viewer';
-import { Select } from '@/components/ui/field';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
 import {
   cancelRun,
+  cloneRun,
   createReplay,
+  deleteRun,
+  exportRunBundle,
   getMockFrames,
   getQuickCompareTarget,
   getTimelineFrame,
@@ -30,7 +39,8 @@ import {
   getRunMessages,
   getRunMetrics,
   getRunState,
-  getRunTraces
+  getRunTraces,
+  rebuildProjection
 } from '@/lib/api/client';
 import { useLiveRun } from '@/lib/hooks/use-live-run';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
@@ -45,10 +55,21 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
   const setShowCriticalPath = usePreferencesStore((state) => state.setShowCriticalPath);
   const showParallelBranches = usePreferencesStore((state) => state.showParallelBranches);
   const setShowParallelBranches = usePreferencesStore((state) => state.setShowParallelBranches);
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const confirmation = useConfirmation();
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>();
   const [replayDescriptorJson, setReplayDescriptorJson] = useState<Record<string, unknown> | undefined>();
   const [replaySeq, setReplaySeq] = useState<number | undefined>();
+  const [showCloneForm, setShowCloneForm] = useState(false);
+  const [cloneTagsText, setCloneTagsText] = useState('');
+  const [cloneContextText, setCloneContextText] = useState('{}');
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [exportIncludeCanonical, setExportIncludeCanonical] = useState(true);
+  const [exportIncludeRaw, setExportIncludeRaw] = useState(false);
+  const [exportEventLimit, setExportEventLimit] = useState(10000);
+  const [exportFormat, setExportFormat] = useState<'json' | 'jsonl'>('json');
 
   const runQuery = useQuery({ queryKey: ['run', runId, demoMode], queryFn: () => getRun(runId, demoMode) });
   const stateQuery = useQuery({
@@ -114,12 +135,97 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
         queryClient.invalidateQueries({ queryKey: ['run', runId] }),
         queryClient.invalidateQueries({ queryKey: ['run-state', runId] })
       ]);
+      toast('success', 'Run cancelled.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to cancel run.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
   const replayMutation = useMutation({
     mutationFn: () => createReplay(runId, demoMode),
-    onSuccess: (data) => setReplayDescriptorJson(data as unknown as Record<string, unknown>)
+    onSuccess: (data) => {
+      setReplayDescriptorJson(data as unknown as Record<string, unknown>);
+      toast('success', 'Replay descriptor generated.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to create replay.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
+  });
+
+  const rebuildMutation = useMutation({
+    mutationFn: () => rebuildProjection(runId, demoMode),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['run-state', runId] });
+      toast('success', 'Projection rebuilt.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to rebuild projection.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteRun(runId, demoMode),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['runs'] });
+      toast('success', 'Run deleted.');
+      router.push('/runs');
+    },
+    onError: (error) => {
+      toast('error', `Failed to delete run.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
+  });
+
+  const cloneMutation = useMutation({
+    mutationFn: () => {
+      const tags = cloneTagsText
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      let context: Record<string, unknown> | undefined;
+      try {
+        const parsed = JSON.parse(cloneContextText);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) context = parsed;
+      } catch {
+        /* keep undefined */
+      }
+      return cloneRun(runId, demoMode, { tags: tags.length ? tags : undefined, context });
+    },
+    onSuccess: (data) => {
+      setShowCloneForm(false);
+      toast('success', 'Run cloned successfully.');
+      router.push(`/runs/live/${data.runId}`);
+    },
+    onError: (error) => {
+      toast('error', `Failed to clone run.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const bundle = await exportRunBundle(runId, demoMode, {
+        includeCanonical: exportIncludeCanonical,
+        includeRaw: exportIncludeRaw,
+        eventLimit: exportEventLimit,
+        format: exportFormat
+      });
+      const ts = bundle.exportedAt ? new Date(bundle.exportedAt).toISOString().replace(/[:.]/g, '-') : 'now';
+      const ext = exportFormat === 'jsonl' ? 'jsonl' : 'json';
+      const content =
+        exportFormat === 'jsonl'
+          ? [bundle.run, ...(bundle.canonicalEvents ?? []), ...(bundle.rawEvents ?? [])]
+              .map((item) => JSON.stringify(item))
+              .join('\n')
+          : JSON.stringify(bundle, null, 2);
+      const mimeType = exportFormat === 'jsonl' ? 'application/x-ndjson' : 'application/json';
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `run-${runId.slice(0, 8)}-${ts}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   });
 
   const isLoading = runQuery.isLoading || stateQuery.isLoading;
@@ -127,12 +233,19 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
 
   const observabilitySummary = useMemo(() => {
     if (!metricsQuery.data || !tracesQuery.data) return [];
-    return [
+    const items = [
       { label: 'Event count', value: String(metricsQuery.data.eventCount) },
       { label: 'Tool calls', value: String(metricsQuery.data.toolCallCount) },
       { label: 'Signals', value: String(metricsQuery.data.signalCount) },
       { label: 'Trace spans', value: String(tracesQuery.data.spanCount) }
     ];
+    if (metricsQuery.data.totalTokens) {
+      items.push({ label: 'Tokens', value: String(metricsQuery.data.totalTokens) });
+    }
+    if (metricsQuery.data.estimatedCostUsd) {
+      items.push({ label: 'Est. cost', value: `$${metricsQuery.data.estimatedCostUsd.toFixed(4)}` });
+    }
+    return items;
   }, [metricsQuery.data, tracesQuery.data]);
 
   const replayFrames = useMemo(() => (liveMode ? [] : getMockFrames(runId)), [liveMode, runId]);
@@ -247,9 +360,19 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
         <SignalRail state={projectedState} />
       </div>
 
+      {liveMode && run.status === 'running' && (
+        <SessionInteractionPanel runId={runId} demoMode={demoMode} state={projectedState} />
+      )}
+
       <div className="split-layout">
         <div className="panel-stack">
           <DecisionPanel run={run} state={projectedState} />
+          {projectedState.policy && (
+            <PolicyPanel
+              policy={projectedState.policy}
+              policyHints={run.metadata?.policyHints as import('@/lib/types').PolicyHints | undefined}
+            />
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Run observability summary</CardTitle>
@@ -320,10 +443,123 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
                   <RefreshCw size={16} />
                   {replayMutation.isPending ? 'Preparing replay...' : 'Request replay descriptor'}
                 </Button>
+                <Button variant="secondary" onClick={() => setShowExportOptions(!showExportOptions)}>
+                  <Download size={16} />
+                  Export bundle
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => rebuildMutation.mutate()}
+                  disabled={rebuildMutation.isPending}
+                >
+                  <Database size={16} />
+                  {rebuildMutation.isPending ? 'Rebuilding...' : 'Rebuild projection'}
+                </Button>
+                {['completed', 'failed', 'cancelled'].includes(run.status) && (
+                  <Button
+                    variant="danger"
+                    onClick={async () => {
+                      const confirmed = await confirmation.confirm({
+                        title: 'Delete run permanently',
+                        description: `Permanently delete run ${runId.slice(0, 8)}...? This action cannot be undone.`,
+                        confirmLabel: 'Delete'
+                      });
+                      if (confirmed) deleteMutation.mutate();
+                    }}
+                    disabled={deleteMutation.isPending}
+                    aria-label="Permanently delete this run"
+                  >
+                    <Trash2 size={16} />
+                    {deleteMutation.isPending ? 'Deleting...' : 'Permanent delete'}
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => setShowCloneForm(!showCloneForm)}>
+                  <Copy size={16} />
+                  Clone run
+                </Button>
                 <Link href="/runs" className="button button-ghost">
                   Open run history
                 </Link>
               </div>
+              {showExportOptions && (
+                <Card>
+                  <CardContent className="stack" style={{ padding: '1rem' }}>
+                    <div className="field-grid">
+                      <label className="switch-row">
+                        <input
+                          type="checkbox"
+                          checked={exportIncludeCanonical}
+                          onChange={(e) => setExportIncludeCanonical(e.target.checked)}
+                        />
+                        <span>Include canonical events</span>
+                      </label>
+                      <label className="switch-row">
+                        <input
+                          type="checkbox"
+                          checked={exportIncludeRaw}
+                          onChange={(e) => setExportIncludeRaw(e.target.checked)}
+                        />
+                        <span>Include raw events</span>
+                      </label>
+                    </div>
+                    <div className="field-grid">
+                      <div>
+                        <FieldLabel>Event limit</FieldLabel>
+                        <Input
+                          type="number"
+                          value={String(exportEventLimit)}
+                          min={1}
+                          max={50000}
+                          onChange={(e) => setExportEventLimit(Number(e.target.value) || 10000)}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Format</FieldLabel>
+                        <Select
+                          value={exportFormat}
+                          onChange={(e) => setExportFormat(e.target.value as 'json' | 'jsonl')}
+                        >
+                          <option value="json">JSON</option>
+                          <option value="jsonl">JSONL (newline-delimited)</option>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button
+                      variant="primary"
+                      onClick={() => exportMutation.mutate()}
+                      disabled={exportMutation.isPending}
+                    >
+                      <Download size={16} />
+                      {exportMutation.isPending ? 'Exporting...' : 'Download'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+              {showCloneForm && (
+                <Card>
+                  <CardContent className="stack" style={{ padding: '1rem' }}>
+                    <div>
+                      <FieldLabel>Override tags (comma-separated)</FieldLabel>
+                      <Input
+                        value={cloneTagsText}
+                        onChange={(event) => setCloneTagsText(event.target.value)}
+                        placeholder="clone,experiment-2"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>Override context (JSON)</FieldLabel>
+                      <Textarea
+                        value={cloneContextText}
+                        onChange={(event) => setCloneContextText(event.target.value)}
+                      />
+                    </div>
+                    <Button variant="primary" onClick={() => cloneMutation.mutate()} disabled={cloneMutation.isPending}>
+                      <Copy size={16} />
+                      {cloneMutation.isPending ? 'Cloning...' : 'Clone with overrides'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
               {replayDescriptorJson ? (
                 <JsonViewer value={replayDescriptorJson} />
               ) : (
@@ -336,6 +572,15 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
           </Card>
         </div>
       </div>
+      <ConfirmationDialog
+        open={confirmation.state.open}
+        title={confirmation.state.title}
+        description={confirmation.state.description}
+        confirmLabel={confirmation.state.confirmLabel}
+        variant={confirmation.state.variant}
+        onConfirm={confirmation.state.onConfirm}
+        onCancel={confirmation.cancel}
+      />
     </div>
   );
 }

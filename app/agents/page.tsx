@@ -7,7 +7,7 @@ import { AgentCard } from '@/components/agents/agent-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/field';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
-import { getAgentProfiles } from '@/lib/api/client';
+import { getAgentMetrics, getAgentProfiles } from '@/lib/api/client';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 
 export default function AgentsPage() {
@@ -15,14 +15,37 @@ export default function AgentsPage() {
   const [search, setSearch] = useState('');
   const [framework, setFramework] = useState('all');
   const agentsQuery = useQuery({ queryKey: ['agent-profiles', demoMode], queryFn: () => getAgentProfiles(demoMode) });
+  const metricsQuery = useQuery({
+    queryKey: ['agent-metrics', demoMode],
+    queryFn: () => getAgentMetrics(demoMode)
+  });
+
+  const enrichedAgents = useMemo(() => {
+    const agents = agentsQuery.data ?? [];
+    const metricsMap = new Map((metricsQuery.data ?? []).map((m) => [m.agentRef, m]));
+    if (metricsMap.size === 0) return agents;
+    return agents.map((agent) => {
+      const m = metricsMap.get(agent.agentRef);
+      if (!m) return agent;
+      return {
+        ...agent,
+        metrics: {
+          runs: m.runs,
+          signals: m.signals,
+          averageLatencyMs: m.averageLatencyMs,
+          averageConfidence: m.averageConfidence
+        }
+      };
+    });
+  }, [agentsQuery.data, metricsQuery.data]);
 
   const frameworks = useMemo(() => {
-    return ['all', ...new Set((agentsQuery.data ?? []).map((agent) => agent.framework))];
-  }, [agentsQuery.data]);
+    return ['all', ...new Set(enrichedAgents.map((agent) => agent.framework))];
+  }, [enrichedAgents]);
 
   const filtered = useMemo(() => {
     const lower = search.toLowerCase();
-    return (agentsQuery.data ?? []).filter((agent) => {
+    return enrichedAgents.filter((agent) => {
       const matchesFramework = framework === 'all' || agent.framework === framework;
       const haystack = [
         agent.name,
@@ -36,7 +59,7 @@ export default function AgentsPage() {
         .toLowerCase();
       return matchesFramework && haystack.includes(lower);
     });
-  }, [agentsQuery.data, framework, search]);
+  }, [enrichedAgents, framework, search]);
 
   if (agentsQuery.isLoading)
     return (

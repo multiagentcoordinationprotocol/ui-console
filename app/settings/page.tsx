@@ -2,20 +2,25 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RotateCcw, Trash2, Webhook } from 'lucide-react';
+import { Pause, Play, RotateCcw, Trash2, Webhook } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useConfirmation } from '@/lib/hooks/use-confirmation';
+import { useToast } from '@/components/ui/toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FieldLabel, Input, Select } from '@/components/ui/field';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
+import { PolicyManagement } from '@/components/settings/policy-management';
 import {
   createWebhook,
   deleteWebhook,
   getAuditLogs,
   getRuntimeHealth,
   getWebhooks,
-  resetCircuitBreaker
+  resetCircuitBreaker,
+  updateWebhook
 } from '@/lib/api/client';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 import { formatDateTime } from '@/lib/utils/format';
@@ -39,10 +44,43 @@ export default function SettingsPage() {
   const [webhookUrl, setWebhookUrl] = useState('https://example.com/hooks/macp');
   const [webhookSecret, setWebhookSecret] = useState('change-me');
   const [webhookEvents, setWebhookEvents] = useState('run.completed,run.failed,signal.emitted');
+  const [auditActor, setAuditActor] = useState('');
+  const [auditAction, setAuditAction] = useState('');
+  const [auditResource, setAuditResource] = useState('');
+  const [auditResourceId, setAuditResourceId] = useState('');
+  const [auditAfter, setAuditAfter] = useState('');
+  const [auditBefore, setAuditBefore] = useState('');
+  const [auditOffset, setAuditOffset] = useState(0);
+  const auditLimit = 10;
 
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const confirmation = useConfirmation();
   const webhooksQuery = useQuery({ queryKey: ['settings-webhooks', demoMode], queryFn: () => getWebhooks(demoMode) });
-  const auditQuery = useQuery({ queryKey: ['settings-audit', demoMode], queryFn: () => getAuditLogs(demoMode) });
+  const auditQuery = useQuery({
+    queryKey: [
+      'settings-audit',
+      demoMode,
+      auditActor,
+      auditAction,
+      auditResource,
+      auditResourceId,
+      auditAfter,
+      auditBefore,
+      auditOffset
+    ],
+    queryFn: () =>
+      getAuditLogs(demoMode, {
+        actor: auditActor || undefined,
+        action: auditAction || undefined,
+        resource: auditResource || undefined,
+        resourceId: auditResourceId || undefined,
+        createdAfter: auditAfter || undefined,
+        createdBefore: auditBefore || undefined,
+        limit: auditLimit,
+        offset: auditOffset
+      })
+  });
   const healthQuery = useQuery({ queryKey: ['settings-health', demoMode], queryFn: () => getRuntimeHealth(demoMode) });
 
   const createWebhookMutation = useMutation({
@@ -60,6 +98,10 @@ export default function SettingsPage() {
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
+      toast('success', 'Webhook created successfully.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to create webhook.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
@@ -67,10 +109,33 @@ export default function SettingsPage() {
     mutationFn: (id: string) => deleteWebhook(id, demoMode),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
+      toast('success', 'Webhook removed.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to remove webhook.${error instanceof Error ? ` ${error.message}` : ''}`);
     }
   });
 
-  const resetBreakerMutation = useMutation({ mutationFn: () => resetCircuitBreaker(demoMode) });
+  const toggleWebhookMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) => updateWebhook(id, { active }, demoMode),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] });
+      toast('success', `Webhook ${variables.active ? 'resumed' : 'paused'}.`);
+    },
+    onError: (error) => {
+      toast('error', `Failed to update webhook.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
+  });
+
+  const resetBreakerMutation = useMutation({
+    mutationFn: () => resetCircuitBreaker(demoMode),
+    onSuccess: () => {
+      toast('success', 'Circuit breaker reset.');
+    },
+    onError: (error) => {
+      toast('error', `Failed to reset circuit breaker.${error instanceof Error ? ` ${error.message}` : ''}`);
+    }
+  });
 
   const preferencePayload = useMemo(
     () => ({ theme, demoMode, autoFollow, showCriticalPath, showParallelBranches, replaySpeed, logsDensity }),
@@ -86,14 +151,15 @@ export default function SettingsPage() {
     );
   }
   if (webhooksQuery.error || auditQuery.error || healthQuery.error || !healthQuery.data) {
-    return (
-      <ErrorPanel
-        message={String(
-          webhooksQuery.error ?? auditQuery.error ?? healthQuery.error ?? 'Settings data is unavailable.'
-        )}
-        actionHref="/"
-      />
-    );
+    const errors = [
+      webhooksQuery.error ? `Webhooks: ${String(webhooksQuery.error)}` : '',
+      auditQuery.error ? `Audit: ${String(auditQuery.error)}` : '',
+      healthQuery.error ? `Health: ${String(healthQuery.error)}` : '',
+      !healthQuery.data && !healthQuery.error ? 'Runtime health data is unavailable.' : ''
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return <ErrorPanel message={errors} actionHref="/" />;
   }
 
   return (
@@ -260,19 +326,54 @@ export default function SettingsPage() {
                   style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}
                 >
                   <div>
-                    <div className="list-item-title">{webhook.url}</div>
+                    <div className="list-item-title">
+                      {webhook.url}
+                      <Badge
+                        label={webhook.active ? 'active' : 'paused'}
+                        tone={webhook.active ? 'success' : 'neutral'}
+                      />
+                    </div>
                     <div className="list-item-meta">
                       {webhook.events.join(', ')} · created {formatDateTime(webhook.createdAt)}
+                      {webhook.deliveryStats ? (
+                        <span>
+                          {' '}
+                          · {webhook.deliveryStats.succeeded}/{webhook.deliveryStats.total} delivered
+                          {webhook.deliveryStats.failed > 0 ? ` (${webhook.deliveryStats.failed} failed)` : ''}
+                          {webhook.deliveryStats.lastDeliveredAt
+                            ? ` · last ${formatDateTime(webhook.deliveryStats.lastDeliveredAt)}`
+                            : ''}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                  <Button
-                    variant="danger"
-                    onClick={() => deleteWebhookMutation.mutate(webhook.id)}
-                    disabled={deleteWebhookMutation.isPending}
-                  >
-                    <Trash2 size={16} />
-                    Remove
-                  </Button>
+                  <div className="section-actions">
+                    <Button
+                      variant="secondary"
+                      onClick={() => toggleWebhookMutation.mutate({ id: webhook.id, active: !webhook.active })}
+                      disabled={toggleWebhookMutation.isPending}
+                      aria-label={webhook.active ? `Pause webhook ${webhook.url}` : `Resume webhook ${webhook.url}`}
+                    >
+                      {webhook.active ? <Pause size={14} /> : <Play size={14} />}
+                      {webhook.active ? 'Pause' : 'Resume'}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={async () => {
+                        const confirmed = await confirmation.confirm({
+                          title: 'Remove webhook',
+                          description: `Remove the subscription to ${webhook.url}? This cannot be undone.`,
+                          confirmLabel: 'Remove'
+                        });
+                        if (confirmed) deleteWebhookMutation.mutate(webhook.id);
+                      }}
+                      disabled={deleteWebhookMutation.isPending}
+                      aria-label={`Remove webhook ${webhook.url}`}
+                    >
+                      <Trash2 size={16} />
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -285,9 +386,94 @@ export default function SettingsPage() {
             <CardTitle>Audit trail</CardTitle>
             <CardDescription>Recent administrative actions routed through the control plane.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="stack">
+            <div className="grid-3">
+              <div>
+                <FieldLabel>Actor</FieldLabel>
+                <Input
+                  value={auditActor}
+                  onChange={(e) => {
+                    setAuditActor(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                  placeholder="Filter by actor"
+                />
+              </div>
+              <div>
+                <FieldLabel>Action</FieldLabel>
+                <Select
+                  value={auditAction}
+                  onChange={(e) => {
+                    setAuditAction(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                >
+                  <option value="">All actions</option>
+                  <option value="run.create">run.create</option>
+                  <option value="run.archive">run.archive</option>
+                  <option value="run.cancel">run.cancel</option>
+                  <option value="run.delete">run.delete</option>
+                  <option value="webhook.create">webhook.create</option>
+                  <option value="webhook.delete">webhook.delete</option>
+                  <option value="circuit_breaker.reset">circuit_breaker.reset</option>
+                  <option value="policy.register">policy.register</option>
+                  <option value="policy.delete">policy.delete</option>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel>Resource</FieldLabel>
+                <Select
+                  value={auditResource}
+                  onChange={(e) => {
+                    setAuditResource(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                >
+                  <option value="">All resources</option>
+                  <option value="run">run</option>
+                  <option value="webhook">webhook</option>
+                  <option value="circuit-breaker">circuit-breaker</option>
+                  <option value="policy">policy</option>
+                </Select>
+              </div>
+            </div>
+            <div className="grid-3">
+              <div>
+                <FieldLabel>Resource ID</FieldLabel>
+                <Input
+                  value={auditResourceId}
+                  onChange={(e) => {
+                    setAuditResourceId(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                  placeholder="Filter by resource ID"
+                />
+              </div>
+              <div>
+                <FieldLabel>Created after</FieldLabel>
+                <Input
+                  type="date"
+                  value={auditAfter}
+                  onChange={(e) => {
+                    setAuditAfter(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                />
+              </div>
+              <div>
+                <FieldLabel>Created before</FieldLabel>
+                <Input
+                  type="date"
+                  value={auditBefore}
+                  onChange={(e) => {
+                    setAuditBefore(e.target.value);
+                    setAuditOffset(0);
+                  }}
+                />
+              </div>
+            </div>
             <div className="timeline-list">
-              {(auditQuery.data?.data ?? []).slice(0, 10).map((entry, index) => (
+              {(auditQuery.data?.data ?? []).map((entry, index) => (
                 <div key={`${entry.action}-${index}`} className="timeline-item">
                   <div className="list-item-title">{entry.action}</div>
                   <div className="list-item-meta">
@@ -300,9 +486,39 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+            <div className="section-actions">
+              <Button
+                variant="ghost"
+                disabled={auditOffset === 0}
+                onClick={() => setAuditOffset(Math.max(0, auditOffset - auditLimit))}
+              >
+                Previous
+              </Button>
+              <span className="muted small">
+                Showing {auditOffset + 1}–{auditOffset + (auditQuery.data?.data.length ?? 0)} of{' '}
+                {auditQuery.data?.total ?? '?'}
+              </span>
+              <Button
+                variant="ghost"
+                disabled={(auditQuery.data?.data.length ?? 0) < auditLimit}
+                onClick={() => setAuditOffset(auditOffset + auditLimit)}
+              >
+                Next
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
+      <PolicyManagement demoMode={demoMode} />
+      <ConfirmationDialog
+        open={confirmation.state.open}
+        title={confirmation.state.title}
+        description={confirmation.state.description}
+        confirmLabel={confirmation.state.confirmLabel}
+        variant={confirmation.state.variant}
+        onConfirm={confirmation.state.onConfirm}
+        onCancel={confirmation.cancel}
+      />
     </div>
   );
 }

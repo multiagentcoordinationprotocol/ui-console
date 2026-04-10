@@ -1,10 +1,11 @@
-export function formatDateTime(value?: string | number | Date): string {
+export function formatDateTime(value?: string | number | Date, timeZone?: string): string {
   if (!value) return '—';
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
+    timeZone
   }).format(date);
 }
 
@@ -53,6 +54,20 @@ export function titleCase(value: string): string {
 export function truncate(value: string, max = 120): string {
   if (value.length <= max) return value;
   return `${value.slice(0, max - 1)}…`;
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T/;
+
+export function formatChartLabel(label: string, timeZone?: string): string {
+  if (ISO_DATE_RE.test(label)) {
+    const date = new Date(label);
+    if (!Number.isNaN(date.getTime())) {
+      return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', timeZone }).format(
+        date
+      );
+    }
+  }
+  return label;
 }
 
 export function getStatusTone(status: string): string {

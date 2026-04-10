@@ -7,6 +7,84 @@ export type SessionState =
   | 'SESSION_STATE_RESOLVED'
   | 'SESSION_STATE_EXPIRED';
 
+/* ─── Policy governance (RFC-MACP-0012) ─── */
+
+export type PolicyType = 'none' | 'majority' | 'supermajority' | 'unanimous' | string;
+export type VotingAlgorithm = 'none' | 'majority' | 'supermajority' | 'unanimous' | 'weighted';
+export type CommitmentAuthority = 'initiator_only' | 'designated_roles' | 'any_participant';
+
+export interface PolicyHints {
+  type?: PolicyType;
+  description?: string;
+  threshold?: number;
+  vetoEnabled?: boolean;
+  vetoRoles?: string[];
+  vetoThreshold?: number;
+  minimumConfidence?: number;
+  designatedRoles?: string[];
+  criticalSeverityVetoes?: boolean;
+}
+
+export interface CommitmentEvaluation {
+  commitmentId: string;
+  decision: 'allow' | 'deny';
+  reasons: string[];
+  ts: string;
+}
+
+export interface PolicyProjection {
+  policyVersion: string;
+  policyDescription?: string;
+  resolvedAt?: string;
+  outcomePositive?: boolean;
+  commitmentEvaluations: CommitmentEvaluation[];
+}
+
+export interface PolicyDefinition {
+  policy_id: string;
+  mode: string;
+  schema_version: number;
+  description: string;
+  rules: {
+    voting: {
+      algorithm: VotingAlgorithm;
+      threshold?: number;
+      quorum?: { type: 'count' | 'percentage'; value: number };
+      weights?: Record<string, number>;
+    };
+    objection_handling: {
+      critical_severity_vetoes: boolean;
+      veto_threshold: number;
+    };
+    evaluation: {
+      minimum_confidence: number;
+      required_before_voting: boolean;
+    };
+    commitment: {
+      authority: CommitmentAuthority;
+      require_vote_quorum: boolean;
+      designated_roles: string[];
+    };
+  };
+}
+
+export interface RuntimePolicyDescriptor {
+  policyId: string;
+  mode: string;
+  description: string;
+  rules: Record<string, unknown>;
+  schemaVersion: number;
+  registeredAtUnixMs?: number;
+}
+
+export interface RegisterPolicyRequest {
+  policyId: string;
+  mode: string;
+  description: string;
+  rules: Record<string, unknown>;
+  schemaVersion?: number;
+}
+
 export interface PackSummary {
   slug: string;
   name: string;
@@ -23,6 +101,8 @@ export interface ScenarioSummary {
   tags?: string[];
   runtimeKind?: string;
   agentRefs?: string[];
+  policyVersion?: string;
+  policyHints?: PolicyHints;
 }
 
 export interface LaunchSchemaAgent {
@@ -58,6 +138,7 @@ export interface LaunchSchemaResponse {
     modeVersion: string;
     configurationVersion: string;
     policyVersion?: string;
+    policyHints?: PolicyHints;
     ttlMs: number;
     initiatorParticipantId?: string;
   };
@@ -88,6 +169,7 @@ export interface ExecutionRequest {
     modeVersion: string;
     configurationVersion: string;
     policyVersion?: string;
+    policyHints?: PolicyHints;
     ttlMs: number;
     initiatorParticipantId?: string;
     participants: Array<{
@@ -150,6 +232,18 @@ export interface RunRecord {
   archivedAt?: string | null;
 }
 
+export interface DashboardRunSummary {
+  id: string;
+  status: RunStatus;
+  runtimeKind: string;
+  createdAt: string;
+  startedAt?: string;
+  endedAt?: string;
+  scenarioRef?: string;
+  environment?: string;
+  durationMs?: number;
+}
+
 export interface CreateRunResponse {
   runId: string;
   status: RunStatus;
@@ -162,6 +256,7 @@ export interface CanonicalEvent {
   seq: number;
   ts: string;
   type: string;
+  schemaVersion?: number;
   subject?: {
     kind: string;
     id: string;
@@ -209,6 +304,10 @@ export interface MetricsSummary {
   lastEventAt?: string;
   durationMs?: number;
   sessionState?: SessionState;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
 }
 
 export interface RunStateProjection {
@@ -238,6 +337,7 @@ export interface RunStateProjection {
       confidence?: number;
       reasons?: string[];
       finalized: boolean;
+      outcomePositive?: boolean;
       proposalId?: string;
     };
   };
@@ -265,6 +365,7 @@ export interface RunStateProjection {
     totalEvents: number;
     recent: Array<Pick<CanonicalEvent, 'id' | 'seq' | 'ts' | 'type' | 'subject'>>;
   };
+  policy: PolicyProjection;
   trace: TraceSummary;
   outboundMessages: {
     total: number;
@@ -369,12 +470,20 @@ export interface WebhookSubscription {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  deliveryStats?: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    lastDeliveredAt?: string;
+  };
 }
 
 export interface DashboardKpis {
   totalRuns: number;
   activeRuns: number;
-  successRate: number;
+  completedRuns: number;
+  failedRuns: number;
+  cancelledRuns: number;
   averageDurationMs: number;
   totalSignals: number;
   totalCostUsd: number;
@@ -403,9 +512,92 @@ export interface AgentProfile {
   metrics: {
     runs: number;
     signals: number;
-    averageLatencyMs: number;
+    averageLatencyMs?: number;
     averageConfidence: number;
   };
+}
+
+export interface SendRunMessageRequest {
+  from: string;
+  to?: string[];
+  messageType: string;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SendSignalRequest {
+  from: string;
+  to: string[];
+  messageType: string;
+  payload?: Record<string, unknown>;
+  signalType?: string;
+  severity?: string;
+}
+
+export interface RunExportBundle {
+  run: RunRecord;
+  session: Record<string, unknown> | null;
+  projection: RunStateProjection | null;
+  canonicalEvents: CanonicalEvent[] | null;
+  rawEvents: Record<string, unknown>[] | null;
+  artifacts: Artifact[];
+  metrics: MetricsSummary | null;
+  exportedAt: string;
+}
+
+/* ─── Shared API response types ─── */
+
+export interface MutationAck {
+  ok: boolean;
+  runId: string;
+}
+
+export interface BatchOperationResult {
+  results: Array<{ runId: string; ok: boolean }>;
+}
+
+export interface RebuildProjectionResult {
+  rebuilt: boolean;
+  latestSeq: number;
+}
+
+export interface CircuitBreakerResult {
+  status: string;
+  state: string;
+}
+
+export interface RunExampleResult {
+  compiled: CompileLaunchResult;
+  hostedAgents: Array<Record<string, unknown>>;
+  controlPlane: {
+    baseUrl: string;
+    validated: boolean;
+    submitted: boolean;
+    runId: string;
+    status: string;
+    traceId: string;
+    policyRegistered?: boolean;
+    policyVersion?: string;
+  };
+}
+
+export interface CreateArtifactResult {
+  id: string;
+  runId: string;
+  kind: string;
+  label: string;
+  uri?: string;
+  inline?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AgentMetricsEntry {
+  agentRef: string;
+  runs: number;
+  signals: number;
+  messages: number;
+  averageLatencyMs?: number;
+  averageConfidence: number;
 }
 
 export interface AppPreferences {
@@ -416,4 +608,47 @@ export interface AppPreferences {
   showParallelBranches: boolean;
   replaySpeed: number;
   logsDensity: 'compact' | 'comfortable';
+}
+
+/* ─── Query parameter types ─── */
+
+export interface ListRunsQuery {
+  status?: RunStatus;
+  tags?: string[];
+  createdAfter?: string;
+  createdBefore?: string;
+  limit?: number;
+  offset?: number;
+  sortBy?: 'createdAt' | 'updatedAt';
+  sortOrder?: 'asc' | 'desc';
+  includeArchived?: boolean;
+  environment?: string;
+  scenarioRef?: string;
+  search?: string;
+}
+
+export interface ListAuditQuery {
+  actor?: string;
+  action?: string;
+  resource?: string;
+  resourceId?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ExportRunQuery {
+  includeCanonical?: boolean;
+  includeRaw?: boolean;
+  eventLimit?: number;
+  format?: 'json' | 'jsonl';
+}
+
+export interface ReadinessProbeResponse {
+  ok: boolean;
+  database: string;
+  runtime: { ok: boolean; runtimeKind?: string; detail?: string };
+  streamConsumer: string;
+  circuitBreaker: string;
 }

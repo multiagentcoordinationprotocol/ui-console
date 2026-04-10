@@ -5,10 +5,11 @@
 | Area | Feature | Status | Notes |
 |---|---|---:|---|
 | Dashboard | KPI cards | ✅ | Runs, signals, cost, success rate |
-| Dashboard | Charts | ✅ | Volume, latency, error, signal trends |
+| Dashboard | Charts | ✅ | Volume, latency, error, signal trends (ISO timestamp aware) |
 | Dashboard | Service health summary | ✅ | Runtime health surfaced |
 | Scenarios | Pack + scenario catalog | ✅ | Search and pack filters |
 | Scenarios | Scenario detail | ✅ | Templates, versions, launch schema |
+| Scenarios | Policy hints | ✅ | Policy type, threshold, veto config on scenario cards and detail |
 | Run creation | Schema-driven launch form | ✅ | Uses launch schema defaults |
 | Run creation | Raw JSON editor | ✅ | Switchable input mode |
 | Run creation | Compile launch request | ✅ | Example Service integration |
@@ -25,21 +26,26 @@
 | Run detail | Final decision panel | ✅ | Action, confidence, rationale |
 | Run detail | Artifacts/messages panel | ✅ | Trace/report bundle visibility |
 | Run detail | Replay descriptor request | ✅ | Control Plane replay hookup |
+| Run detail | Clone with overrides | ✅ | Clone run with custom tags/context |
+| Run detail | Session interaction | ✅ | Send messages and signals to live runs |
+| Run detail | Policy governance | ✅ | RFC-MACP-0012 policy panel, commitment evaluations, policy badges |
 | Run detail | Timeline scrubber | ✅ | Interactive visual replay with frame markers |
-| History | Run history page | ✅ | Search + status/environment filtering |
+| History | Run history page | ✅ | Search + status/environment filtering (server-side) |
 | History | CSV/JSON export | ✅ | Export filtered runs as CSV or JSON |
+| History | Batch operations | ✅ | Cancel, archive, delete, export selected runs |
 | Compare | Run comparison page | ✅ | Summary + raw diff payload |
 | Compare | Decision comparison | ✅ | Side-by-side confidence bars and reasons |
 | Compare | Payload diff viewer | ✅ | Structural diff with color-coded changes |
 | Compare | Signal timeline overlay | ✅ | Dual-lane chronological signal view |
-| Agents | Agent catalog | ✅ | Search + framework filter, direct Example Service `/agents` endpoint |
+| Agents | Agent catalog | ✅ | Search + framework filter, enriched with CP metrics |
 | Agents | Agent detail | ✅ | Scenario coverage + related runs, direct `/agents/:agentRef` endpoint |
 | Logs | Canonical event explorer | ✅ | Run selection + event filters |
 | Traces | Trace summary and artifact explorer | ✅ | Inline span support when available |
 | Observability | Runtime health dashboard | ✅ | Manifest, modes, roots, metrics text |
 | Observability | Raw metrics surface | ✅ | Prometheus text dump |
+| Observability | Readiness probe | ✅ | Per-subsystem health checks |
 | Settings | Preferences store | ✅ | Persisted in local storage |
-| Settings | Webhook management | ✅ | Create/delete webhook UI |
+| Settings | Webhook management | ✅ | Create/toggle/delete, delivery stats display |
 | Settings | Circuit breaker reset | ✅ | Admin action surface |
 | Settings | Audit log view | ✅ | Recent actions |
 | Platform | Demo mode | ✅ | Rich mock dataset |
@@ -49,7 +55,7 @@
 | Platform | Server-side proxy BFF | ✅ | Secret-safe browser integration |
 | Platform | Error boundaries | ✅ | Global + per-component crash recovery |
 | Platform | CI/CD | ✅ | GitHub Actions: lint, typecheck, test, build |
-| Platform | Testing | ✅ | Vitest + React Testing Library, 92 tests |
+| Platform | Testing | ✅ | Vitest + React Testing Library, unit + integration suites |
 | Platform | Pre-commit hooks | ✅ | Husky + lint-staged, Prettier + ESLint |
 
 ## Partially implemented / foundation laid

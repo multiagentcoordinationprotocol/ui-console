@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { ToastProvider } from '@/components/ui/toast';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -23,5 +24,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
 }
