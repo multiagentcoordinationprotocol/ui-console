@@ -121,7 +121,7 @@ describe('real mode API client', () => {
   /* ─── getRunEvents ─── */
 
   describe('getRunEvents', () => {
-    it('calls GET /api/proxy/control-plane/runs/:id/events?limit=500 by default', async () => {
+    it('calls GET /api/proxy/control-plane/runs/:id/events?afterSeq=0&limit=500 by default', async () => {
       const events = canonicalEvents(RUN_ID_1, 3);
       mocker.on('GET', `/api/proxy/control-plane/runs/${RUN_ID_1}/events`, () => ({
         status: 200,
@@ -133,6 +133,7 @@ describe('real mode API client', () => {
 
       expect(result).toHaveLength(3);
       const req = mocker.requests.find((r) => r.url.includes('/events'));
+      expect(req!.url).toContain('afterSeq=0');
       expect(req!.url).toContain('limit=500');
     });
 

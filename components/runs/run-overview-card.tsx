@@ -1,35 +1,63 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRightLeft, RotateCcw, Square, TimerReset } from 'lucide-react';
+import { ArrowRightLeft, ExternalLink, RotateCcw, Search, Square, TimerReset } from 'lucide-react';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import type { RunRecord } from '@/lib/types';
-import { formatCurrency, formatDateTime, formatNumber, formatRelativeDuration } from '@/lib/utils/format';
+import type { MetricsSummary, RunRecord, RunStateProjection } from '@/lib/types';
+import { formatDateTime, formatNumber, formatRelativeDuration } from '@/lib/utils/format';
 import { getRunDurationMs } from '@/lib/utils/macp';
+
+/**
+ * Run statuses considered "live" for the purposes of counter sourcing.
+ * Decision Q1 (plans/ui-improvement-plan.md): during live statuses the
+ * counters tick from the SSE projection; once terminal, from the
+ * persisted metrics aggregate.
+ */
+const LIVE_STATUSES = new Set(['queued', 'starting', 'binding_session', 'running']);
 
 export function RunOverviewCard({
   run,
+  state,
+  metrics,
   connectionStatus,
   reconnectAttempt,
   onCancel,
   onReplay,
-  compareHref
+  compareHref,
+  traceId,
+  jaegerUiUrl
 }: {
   run: RunRecord;
+  /** SSE projection — used for live counter sources (Q1). Omit for historical replay contexts. */
+  state?: RunStateProjection;
+  metrics?: MetricsSummary | null;
   connectionStatus?: string;
   reconnectAttempt?: number;
   onCancel?: () => void;
   onReplay?: () => void;
   compareHref?: string;
+  traceId?: string;
+  jaegerUiUrl?: string;
 }) {
-  const durationMs = Number(run.metadata?.durationMs ?? getRunDurationMs(run));
+  const durationMs = metrics?.durationMs ?? Number(run.metadata?.durationMs ?? getRunDurationMs(run));
+
+  const scenarioRef = run.source?.ref ?? run.metadata?.scenarioRef;
+  const environment = process.env.NEXT_PUBLIC_MACP_ENVIRONMENT_LABEL ?? run.metadata?.environment;
+  const showStream = connectionStatus && connectionStatus !== 'ended';
+
+  // Q1 decision — event/message counter sources switch on run.status.
+  // Live: SSE projection (ticks in real time). Terminal: metrics aggregate.
+  const isLive = LIVE_STATUSES.has(run.status);
+  const eventCount = isLive ? (state?.timeline.totalEvents ?? 0) : (metrics?.eventCount ?? 0);
+  const messageCount = isLive ? (state?.outboundMessages?.total ?? 0) : (metrics?.messageCount ?? 0);
+  const signalCount = metrics?.signalCount ?? state?.signals?.signals.length ?? 0;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{String(run.metadata?.scenarioRef ?? run.source?.ref ?? 'Run detail')}</CardTitle>
+        <CardTitle>{scenarioRef ? `Scenario: ${String(scenarioRef)}` : 'Run detail'}</CardTitle>
         <CardDescription>
           Run {run.id} · started {formatDateTime(run.startedAt ?? run.createdAt)}
         </CardDescription>
@@ -37,9 +65,9 @@ export function RunOverviewCard({
       <CardContent className="stack">
         <div className="inline-list">
           <StatusBadge status={run.status} />
-          <Badge label={String(run.metadata?.templateId ?? 'default')} />
-          <Badge label={String(run.metadata?.environment ?? 'unknown')} tone="info" />
-          {connectionStatus ? (
+          {run.metadata?.templateId ? <Badge label={String(run.metadata.templateId)} /> : null}
+          {environment ? <Badge label={String(environment)} tone="info" /> : null}
+          {showStream ? (
             <Badge
               label={
                 connectionStatus === 'reconnecting' && reconnectAttempt
@@ -65,13 +93,19 @@ export function RunOverviewCard({
             <div className="metric-box-value">{formatRelativeDuration(durationMs)}</div>
           </div>
           <div className="metric-box">
-            <div className="muted small">Tokens</div>
-            <div className="metric-box-value">{formatNumber(Number(run.metadata?.totalTokens ?? 0))}</div>
+            <div className="muted small">Events</div>
+            <div className="metric-box-value">{formatNumber(eventCount)}</div>
           </div>
           <div className="metric-box">
-            <div className="muted small">Estimated cost</div>
-            <div className="metric-box-value">{formatCurrency(Number(run.metadata?.estimatedCostUsd ?? 0))}</div>
+            <div className="muted small">Messages</div>
+            <div className="metric-box-value">{formatNumber(messageCount)}</div>
           </div>
+          <div className="metric-box">
+            <div className="muted small">Signals</div>
+            <div className="metric-box-value">{formatNumber(signalCount)}</div>
+          </div>
+          {/* Q3: Tokens + Est. cost live in the Run observability summary,
+              not the top overview card. Removed from here to avoid duplication. */}
         </div>
 
         <div className="section-actions">
@@ -96,6 +130,18 @@ export function RunOverviewCard({
               <ArrowRightLeft size={16} />
               Compare
             </Link>
+          ) : null}
+          {traceId && traceId !== '00000000000000000000000000000000' ? (
+            <Link href={`/traces?runId=${run.id}`} className="button button-ghost">
+              <Search size={16} />
+              Traces
+            </Link>
+          ) : null}
+          {jaegerUiUrl ? (
+            <a href={jaegerUiUrl} target="_blank" rel="noopener noreferrer" className="button button-ghost">
+              <ExternalLink size={16} />
+              Jaeger
+            </a>
           ) : null}
         </div>
       </CardContent>

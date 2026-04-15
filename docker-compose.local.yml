@@ -1,0 +1,23 @@
+# Local development overrides — uses pre-built images instead of building from source.
+# This avoids needing NPM_TOKEN for GitHub Packages auth.
+#
+# Usage:
+#   docker compose -f docker-compose.e2e.yml -f docker-compose.local.yml up -d --wait
+#   (or just: npm run local:up)
+
+services:
+  migrate:
+    build: !reset null
+    image: ${MACP_CONTROL_PLANE_IMAGE:-ui-console-control-plane:latest}
+    command: node dist/db/migrate.js
+
+  control-plane:
+    build: !reset null
+    image: ${MACP_CONTROL_PLANE_IMAGE:-ui-console-control-plane:latest}
+
+  examples-service:
+    build: !reset null
+    image: ${MACP_EXAMPLES_SERVICE_IMAGE:-ui-console-examples-service:latest}
+    environment:
+      CONTROL_PLANE_API_KEY: "local-dev"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"

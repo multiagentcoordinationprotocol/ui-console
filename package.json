@@ -24,7 +24,13 @@
     "test:e2e": "npx playwright test",
     "test:e2e:headed": "npx playwright test --headed",
     "test:e2e:ui": "npx playwright test --ui",
-    "test:e2e:teardown": "docker compose -f docker-compose.e2e.yml down -v"
+    "test:e2e:teardown": "docker compose -f docker-compose.e2e.yml down -v",
+    "test:e2e:visual": "npx playwright test --config playwright.visual.config.ts",
+    "test:e2e:visual:update": "npx playwright test --config playwright.visual.config.ts --update-snapshots=all",
+    "test:e2e:visual:ui": "npx playwright test --config playwright.visual.config.ts --ui",
+    "local:up": "./scripts/local-stack.sh up",
+    "local:down": "./scripts/local-stack.sh down",
+    "local:status": "./scripts/local-stack.sh status"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

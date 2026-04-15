@@ -2,7 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Bot, FolderKanban, Gauge, History, LucideIcon, Logs, Play, Settings, Radar } from 'lucide-react';
+import {
+  Activity,
+  Bot,
+  FolderKanban,
+  Gauge,
+  History,
+  Layers,
+  LucideIcon,
+  Logs,
+  Play,
+  Radar,
+  Scale,
+  Settings
+} from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 export interface NavItem {
@@ -20,6 +33,8 @@ export const primaryNavItems: NavItem[] = [
   { href: '/logs', label: 'Logs', icon: Logs },
   { href: '/traces', label: 'Traces', icon: Radar },
   { href: '/observability', label: 'Observability', icon: Activity },
+  { href: '/policies', label: 'Policies', icon: Scale },
+  { href: '/modes', label: 'Modes', icon: Layers },
   { href: '/settings', label: 'Settings', icon: Settings }
 ];
 

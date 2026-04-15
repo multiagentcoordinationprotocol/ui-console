@@ -4,19 +4,30 @@ import Link from 'next/link';
 import { Command, Moon, Play, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 
 export function Topbar() {
   const theme = usePreferencesStore((state) => state.theme);
   const demoMode = usePreferencesStore((state) => state.demoMode);
+  const designVersion = usePreferencesStore((state) => state.designVersion);
   const toggleTheme = usePreferencesStore((state) => state.toggleTheme);
   const setDemoMode = usePreferencesStore((state) => state.setDemoMode);
+
+  // R5.3 — breadcrumbs only render under v2 (legacy topbar had no slot).
+  const showBreadcrumbs = designVersion === 'v2';
 
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <Badge label={process.env.NEXT_PUBLIC_MACP_ENVIRONMENT_LABEL ?? 'local-dev'} tone="info" />
-        <span className="topbar-help">⌘K opens command palette</span>
+        {showBreadcrumbs ? (
+          <Breadcrumbs />
+        ) : (
+          <>
+            <Badge label={process.env.NEXT_PUBLIC_MACP_ENVIRONMENT_LABEL ?? 'local-dev'} tone="info" />
+            <span className="topbar-help">⌘K opens command palette</span>
+          </>
+        )}
       </div>
       <div className="topbar-actions">
         <label className="switch-row">

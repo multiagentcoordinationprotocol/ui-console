@@ -15,6 +15,10 @@ on:
         description: 'Run E2E tests (requires Docker)'
         type: boolean
         default: false
+      update_visual_baselines:
+        description: 'Regenerate visual baselines for the current OS (manual; upload as artifact — maintainer commits)'
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -78,6 +82,75 @@ jobs:
         with:
           name: coverage-report
           path: coverage/
+          retention-days: 14
+
+  visual-regression:
+    name: Visual Regression (demo mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@multiagentcoordinationprotocol'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Playwright Chromium (with OS deps)
+        run: npx playwright install chromium --with-deps
+
+      # Strict mode on normal runs: fails if any baseline snapshot drifts.
+      # The first run against a fresh Linux runner will fail because
+      # baselines were generated on macOS (-darwin suffix). Use the
+      # workflow_dispatch "update_visual_baselines" input to regenerate
+      # Linux (-linux suffix) baselines, then commit them from the
+      # uploaded artifact.
+      - name: Run visual regression tests (strict)
+        if: >-
+          github.event_name != 'workflow_dispatch' ||
+          github.event.inputs.update_visual_baselines != 'true'
+        run: npm run test:e2e:visual
+
+      - name: Regenerate missing visual baselines (manual)
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.update_visual_baselines == 'true'
+        run: npx playwright test --config playwright.visual.config.ts --update-snapshots=missing
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload snapshot diff images (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-diffs
+          path: test/e2e/visual/test-results/
+          retention-days: 14
+
+      - name: Upload regenerated baselines (manual runs only)
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.update_visual_baselines == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: test/e2e/visual/**/*.png
           retention-days: 14
 
   integration-tests:

@@ -5,8 +5,15 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { Tabs } from '@/components/ui/tabs';
-import type { Artifact, CanonicalEvent, MetricsSummary, RunStateProjection, TraceSummary } from '@/lib/types';
-import { formatDateTime, formatPercent, titleCase } from '@/lib/utils/format';
+import type {
+  Artifact,
+  CanonicalEvent,
+  LlmCallCompletedData,
+  MetricsSummary,
+  RunStateProjection,
+  TraceSummary
+} from '@/lib/types';
+import { formatDateTime, formatNumber, formatPercent, titleCase } from '@/lib/utils/format';
 
 function matchEventToNode(event: CanonicalEvent, nodeId: string) {
   if (event.subject?.id === nodeId) return true;
@@ -56,6 +63,25 @@ export function NodeInspector({
   const relevantSignals = useMemo(
     () => state.signals.signals.filter((signal) => signal.sourceParticipantId === selectedNode?.id),
     [selectedNode?.id, state.signals.signals]
+  );
+
+  /**
+   * Finding #12 / BE §3.3 — LLM call events for this participant.
+   * Backend synthesizes `llm.call.completed` from message metadata; we
+   * render them here when the selected node is an agent.
+   */
+  const llmCalls = useMemo(
+    () =>
+      events
+        .filter((event) => event.type === 'llm.call.completed')
+        .filter((event) => {
+          const data = event.data as Partial<LlmCallCompletedData>;
+          const fromData = data.participantId === selectedNode?.id;
+          return fromData || (selectedNode ? matchEventToNode(event, selectedNode.id) : false);
+        })
+        .slice(-20)
+        .reverse(),
+    [events, selectedNode]
   );
 
   const relevantMessages = useMemo(() => {
@@ -212,7 +238,7 @@ export function NodeInspector({
                       <div key={event.id} className="timeline-item">
                         <div className="list-item-title">{event.type}</div>
                         <div className="list-item-meta">
-                          seq {event.seq} · {formatDateTime(event.ts)} · {event.source.name}
+                          seq {event.seq} · {formatDateTime(event.ts)} · {event.source?.name ?? ''}
                         </div>
                         <JsonViewer value={event.data} />
                       </div>
@@ -240,7 +266,103 @@ export function NodeInspector({
               id: 'metrics',
               label: 'Metrics',
               content: <JsonViewer value={metrics ?? {}} />
-            }
+            },
+            // Finding #12 — LLM tab, conditionally rendered only when this node
+            // has at least one `llm.call.completed` event. BE §3.3 re-scoped:
+            // the CP synthesizes the event from message metadata, so no agent
+            // changes are required for this tab to populate.
+            ...(llmCalls.length > 0
+              ? [
+                  {
+                    id: 'llm',
+                    label: `LLM (${llmCalls.length})`,
+                    content: (
+                      <div className="stack">
+                        {llmCalls.map((event) => {
+                          const data = event.data as Partial<LlmCallCompletedData>;
+                          const model = data.model ?? 'unknown';
+                          const promptTokens = data.promptTokens ?? 0;
+                          const completionTokens = data.completionTokens ?? 0;
+                          const totalTokens = promptTokens + completionTokens;
+                          const latency = data.latencyMs;
+                          const promptText = data.redactedPrompt ?? data.prompt ?? '';
+                          const responseText = data.response ?? '';
+                          const redacted = Boolean(data.redactedPrompt && !data.prompt);
+                          return (
+                            <details key={event.id} className="list-item" style={{ padding: 'var(--space-md, 12px)' }}>
+                              <summary
+                                style={{
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  gap: 12,
+                                  alignItems: 'center',
+                                  flexWrap: 'wrap'
+                                }}
+                              >
+                                <code className="mono">{model}</code>
+                                <span className="mono muted small">
+                                  {formatNumber(promptTokens)} → {formatNumber(completionTokens)} · Σ
+                                  {formatNumber(totalTokens)}
+                                </span>
+                                {typeof latency === 'number' ? (
+                                  <span className="mono muted small">{latency}ms</span>
+                                ) : null}
+                                <span className="muted small" style={{ marginLeft: 'auto' }}>
+                                  seq {event.seq} · {formatDateTime(event.ts)}
+                                </span>
+                                {redacted ? <Badge label="redacted" tone="warning" /> : null}
+                              </summary>
+                              <div className="stack" style={{ marginTop: 10, gap: 10 }}>
+                                {promptText ? (
+                                  <div>
+                                    <div className="muted small" style={{ marginBottom: 4 }}>
+                                      Prompt
+                                      {redacted ? (
+                                        <span className="muted small" style={{ marginLeft: 6 }}>
+                                          (redacted — see RedactionService)
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <pre className="json-viewer" style={{ maxHeight: 240, whiteSpace: 'pre-wrap' }}>
+                                      {promptText}
+                                    </pre>
+                                  </div>
+                                ) : null}
+                                {responseText ? (
+                                  <div>
+                                    <div className="muted small" style={{ marginBottom: 4 }}>
+                                      Response
+                                    </div>
+                                    <pre className="json-viewer" style={{ maxHeight: 240, whiteSpace: 'pre-wrap' }}>
+                                      {responseText}
+                                    </pre>
+                                  </div>
+                                ) : null}
+                                {data.contextRef?.artifactId || data.contextRef?.uri ? (
+                                  <div className="muted small">
+                                    Context:{' '}
+                                    {data.contextRef.artifactId ? (
+                                      <code>artifact:{data.contextRef.artifactId}</code>
+                                    ) : (
+                                      <code>{data.contextRef.uri}</code>
+                                    )}
+                                  </div>
+                                ) : null}
+                                {data.resultingEventIds && data.resultingEventIds.length > 0 ? (
+                                  <div className="muted small">
+                                    Resulted in {data.resultingEventIds.length} event
+                                    {data.resultingEventIds.length === 1 ? '' : 's'}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </details>
+                          );
+                        })}
+                      </div>
+                    )
+                  }
+                ]
+              : [])
           ]}
         />
       </CardContent>

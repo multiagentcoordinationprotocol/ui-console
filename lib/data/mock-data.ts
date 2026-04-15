@@ -672,7 +672,36 @@ const completedState: RunStateProjection = {
       reasons: ['Chargeback history was low.', 'Growth upside outweighed friction cost.'],
       finalized: true,
       outcomePositive: true,
-      proposalId: 'CUST-1001-initial-review'
+      proposalId: 'CUST-1001-initial-review',
+      prompt: 'Decide whether to approve, step_up, or decline the transaction.',
+      resolvedAt: isoMinutesAgo(55),
+      resolvedBy: 'risk-agent',
+      proposals: [
+        {
+          participantId: 'fraud-agent',
+          action: 'approve',
+          confidence: 0.78,
+          reasons: ['No chargeback history in last 180 days.'],
+          ts: isoMinutesAgo(56),
+          vote: 'allow'
+        },
+        {
+          participantId: 'growth-agent',
+          action: 'approve',
+          confidence: 0.92,
+          reasons: ['VIP cohort — revenue upside significant.'],
+          ts: isoMinutesAgo(56),
+          vote: 'allow'
+        },
+        {
+          participantId: 'risk-agent',
+          action: 'approve',
+          confidence: 0.87,
+          reasons: ['Aggregate signals meet threshold; no veto.'],
+          ts: isoMinutesAgo(55),
+          vote: 'allow'
+        }
+      ]
     }
   },
   signals: {
@@ -723,7 +752,38 @@ const completedState: RunStateProjection = {
         ts: isoMinutesAgo(56)
       },
       { commitmentId: 'eval-002', decision: 'allow', reasons: ['Majority quorum satisfied'], ts: isoMinutesAgo(55) }
-    ]
+    ],
+    expectedCommitments: [
+      {
+        commitmentId: 'eval-001',
+        title: 'Fraud risk attestation',
+        description: 'Confirm that aggregated fraud signals fall below the decision threshold.',
+        requiredRoles: ['fraud', 'risk']
+      },
+      {
+        commitmentId: 'eval-002',
+        title: 'Growth quorum',
+        description: 'Require a majority vote to approve high-value purchases.',
+        requiredRoles: ['growth', 'risk']
+      }
+    ],
+    voteTally: [
+      {
+        commitmentId: 'eval-001',
+        allow: 2,
+        deny: 0,
+        threshold: 0.66,
+        quorum: { required: 2, cast: 2 }
+      },
+      {
+        commitmentId: 'eval-002',
+        allow: 3,
+        deny: 0,
+        threshold: 0.5,
+        quorum: { required: 2, cast: 3 }
+      }
+    ],
+    quorumStatus: 'reached'
   }
 };
 
@@ -1017,6 +1077,51 @@ export const MOCK_RUN_EVENTS: Record<string, CanonicalEvent[]> = {
       subject: { kind: 'decision', id: 'CUST-1001-initial-review' },
       source: { kind: 'runtime', name: 'macp-runtime' },
       data: { action: 'approve', confidence: 0.87 }
+    },
+    // LLM call events synthesized by the CP per BE §3.3 — one per
+    // participant that hit the model. Mock data here drives the
+    // NodeInspector "LLM" tab in demo mode.
+    {
+      id: 'evt-llm-risk-1',
+      runId: COMPLETED_RUN_ID,
+      seq: 13,
+      ts: isoMinutesAgo(56),
+      type: 'llm.call.completed',
+      subject: { kind: 'participant', id: 'risk-agent' },
+      source: { kind: 'control-plane', name: 'macp-control-plane' },
+      data: {
+        participantId: 'risk-agent',
+        model: 'claude-sonnet-4-6',
+        promptTokens: 1820,
+        completionTokens: 312,
+        latencyMs: 870,
+        prompt:
+          'You are a fraud risk analyst. Given the transaction signals below, ' +
+          'recommend APPROVE, STEP_UP, or DECLINE with confidence and reasons.\n\n' +
+          'Signals: chargeback_history (medium, 0.62), vip_customer (info, 0.91)',
+        response:
+          'APPROVE (confidence 0.87). Chargeback history is within tolerance; ' +
+          'VIP signal offsets device-trust risk.',
+        resultingEventIds: ['evt-decision-proposed']
+      }
+    },
+    {
+      id: 'evt-llm-fraud-1',
+      runId: COMPLETED_RUN_ID,
+      seq: 14,
+      ts: isoMinutesAgo(57),
+      type: 'llm.call.completed',
+      subject: { kind: 'participant', id: 'fraud-agent' },
+      source: { kind: 'control-plane', name: 'macp-control-plane' },
+      data: {
+        participantId: 'fraud-agent',
+        model: 'gpt-4o-mini',
+        promptTokens: 980,
+        completionTokens: 124,
+        latencyMs: 420,
+        redactedPrompt: 'Inspect transaction [REDACTED] for CUST-1001. Return structured fraud signals.',
+        response: 'chargeback_history=0.62, device_fingerprint_risk=0.48'
+      }
     }
   ],
   [FAILED_RUN_ID]: [
@@ -1640,19 +1745,30 @@ export const MOCK_CHARTS = {
   ]
 };
 
-export function computeDashboardKpis(): DashboardKpis {
-  const totalRuns = MOCK_RUNS.length;
-  const activeRuns = MOCK_RUNS.filter((run) =>
+/**
+ * Compute dashboard KPIs over an optional subset of runs. When `runs` is
+ * omitted, falls back to the full mock set — preserves back-compat.
+ * Used by `/observability` filter wiring to respond to scenario /
+ * environment pickers in demo mode.
+ */
+export function computeDashboardKpis(runs: RunRecord[] = MOCK_RUNS): DashboardKpis {
+  const totalRuns = runs.length;
+  const activeRuns = runs.filter((run) =>
     ['queued', 'starting', 'binding_session', 'running'].includes(run.status)
   ).length;
-  const completedRuns = MOCK_RUNS.filter((run) => run.status === 'completed').length;
-  const failedRuns = MOCK_RUNS.filter((run) => run.status === 'failed').length;
-  const cancelledRuns = MOCK_RUNS.filter((run) => run.status === 'cancelled').length;
+  const completedRuns = runs.filter((run) => run.status === 'completed').length;
+  const failedRuns = runs.filter((run) => run.status === 'failed').length;
+  const cancelledRuns = runs.filter((run) => run.status === 'cancelled').length;
+  const includedIds = new Set(runs.map((run) => run.id));
+  const metricsForRuns = Object.entries(MOCK_RUN_METRICS).filter(([runId]) => includedIds.has(runId));
   const averageDurationMs =
-    Object.values(MOCK_RUN_METRICS).reduce((acc, metric) => acc + (metric.durationMs ?? 0), 0) / totalRuns;
-  const totalSignals = Object.values(MOCK_RUN_METRICS).reduce((acc, metric) => acc + metric.signalCount, 0);
-  const totalCostUsd = MOCK_RUNS.reduce((acc, run) => acc + Number(run.metadata?.estimatedCostUsd ?? 0), 0);
-  const totalTokens = MOCK_RUNS.reduce((acc, run) => acc + Number(run.metadata?.totalTokens ?? 0), 0);
+    totalRuns > 0
+      ? metricsForRuns.reduce((acc, [, metric]) => acc + (metric.durationMs ?? 0), 0) /
+        Math.max(metricsForRuns.length, 1)
+      : 0;
+  const totalSignals = metricsForRuns.reduce((acc, [, metric]) => acc + metric.signalCount, 0);
+  const totalCostUsd = runs.reduce((acc, run) => acc + Number(run.metadata?.estimatedCostUsd ?? 0), 0);
+  const totalTokens = runs.reduce((acc, run) => acc + Number(run.metadata?.totalTokens ?? 0), 0);
   return {
     totalRuns,
     activeRuns,

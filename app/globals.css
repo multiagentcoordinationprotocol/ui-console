@@ -13,6 +13,28 @@
   --danger: #fb7185;
   --info: #60a5fa;
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  /* R2.1 token-ized values (previously hard-coded inline). Dark-theme defaults. */
+  --code-bg: #0a0a0a;
+  --code-fg: #b3b3b3;
+  --code-inline-bg: rgba(148, 163, 184, 0.12);
+  --sidebar-logo-glow: rgba(59, 130, 246, 0.3);
+
+  /* R2.3 spacing token aliases — theme-agnostic; defined once at :root.
+     Aliased to the hard-coded values scattered across existing rules so
+     no visual diff lands until the rules are migrated individually. */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* R2.4 radii token aliases — same strategy as spacing. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
 }
 
 :root[data-theme='light'] {
@@ -30,6 +52,99 @@
   --danger: #e11d48;
   --info: #2563eb;
   --shadow: 0 18px 48px rgba(0, 0, 0, 0.06);
+  /* R2.1 light-theme overrides — keep today's visual behaviour exactly:
+     json-viewer stayed near-black across both themes before this change,
+     so the light override keeps the same values.
+     (Future R3 palette work may introduce a proper light-theme code block.) */
+  --code-bg: #0a0a0a;
+  --code-fg: #b3b3b3;
+  --code-inline-bg: rgba(148, 163, 184, 0.12);
+  --sidebar-logo-glow: rgba(59, 130, 246, 0.3);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   R3.1 — v2 token palette (design-system preview, flag-gated)
+
+   Applies only when <html data-design="v2">. Default is unset so
+   these tokens have zero effect on the current UI until the flag
+   is turned on (via ?design=v2 query param or the preferences
+   store — wired in R3.3). Values are isolated in --v2-* tokens
+   so the existing tokens keep working side-by-side.
+
+   Source: design language captured in plans/ui-improvement-plan.md
+   → finding #14. Light values match Downloads/macp-console.jsx
+   verbatim; dark values are derived per the rules documented there.
+
+   The subsequent primitive migrations (R4) read these --v2-*
+   tokens when data-design=v2 is active; otherwise they read the
+   legacy tokens above.
+   ───────────────────────────────────────────────────────────── */
+:root[data-design='v2'] {
+  /* v2 dark palette — derived from the mockup.
+     Sidebar stays on --v2-ink (same as light; sidebar is dark in both themes).
+     Content surface + panels flip to a lifted ink for dark mode. */
+  --v2-ink: #0b0c10;
+  --v2-ink-muted: #1c1d24;
+  --v2-ink-line: #2a2b35;
+
+  --v2-bg: #121319;
+  --v2-panel: #181922;
+  --v2-panel-lifted: #1e1f29;
+
+  --v2-border: #2a2b35;
+  --v2-border-subtle: rgba(255, 255, 255, 0.06);
+
+  --v2-text-main: #e4e6ec;
+  --v2-text-sub: #9ba3af;
+  --v2-text-faint: #6b7080;
+
+  --v2-accent: #4f6ef7;
+  --v2-accent-2: #a78bfa;
+  --v2-accent-glow: rgba(79, 110, 247, 0.18);
+
+  --v2-green: #10b981;
+  --v2-amber: #f59e0b;
+  --v2-red: #ef4444;
+
+  /* Sidebar dimensions per mockup (currently 260px legacy — v2 narrows to 220). */
+  --v2-sidebar-w: 220px;
+  --v2-topbar-h: 56px;
+  --v2-content-pad: 28px;
+
+  /* Hover-lift + pulse-live timing baked in for primitive migrations (R4). */
+  --v2-transition: 0.12s ease;
+}
+
+:root[data-design='v2'][data-theme='light'] {
+  /* v2 light palette — values copied verbatim from macp-console.jsx :root. */
+  --v2-ink: #0b0c10;
+  --v2-ink-muted: #1c1d24;
+  --v2-ink-line: #2a2b35;
+
+  --v2-bg: #f9fafb;
+  --v2-panel: #ffffff;
+  --v2-panel-lifted: #f1f2f5;
+
+  --v2-border: #e4e6ec;
+  --v2-border-subtle: rgba(0, 0, 0, 0.04);
+
+  --v2-text-main: #0b0c10;
+  --v2-text-sub: #6b7080;
+  --v2-text-faint: #9ba3af;
+
+  --v2-accent: #4f6ef7;
+  --v2-accent-2: #a78bfa;
+  --v2-accent-glow: rgba(79, 110, 247, 0.18);
+
+  --v2-green: #10b981;
+  --v2-amber: #f59e0b;
+  --v2-red: #ef4444;
+
+  --v2-sidebar-w: 220px;
+  --v2-topbar-h: 56px;
+  --v2-content-pad: 28px;
+
+  --v2-transition: 0.12s ease;
 }
 
 * {
@@ -43,6 +158,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family:
+    var(--font-inter),
     Inter,
     ui-sans-serif,
     system-ui,
@@ -91,7 +207,7 @@ button {
   height: 40px;
   border-radius: 12px;
   background: linear-gradient(135deg, var(--brand), var(--brand-2));
-  box-shadow: 0 0 16px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 16px var(--sidebar-logo-glow);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -454,8 +570,8 @@ button {
 }
 .json-viewer {
   margin: 0;
-  background: #0a0a0a;
-  color: #b3b3b3;
+  background: var(--code-bg);
+  color: var(--code-fg);
   padding: 14px;
   border-radius: 16px;
   border: 1px solid var(--border);
@@ -726,7 +842,7 @@ button {
 }
 
 code {
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--code-inline-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.12rem 0.36rem;
@@ -1014,4 +1130,663 @@ pre code {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   R4.1 — Tooltip primitive styles (components/ui/tooltip.tsx)
+
+   Works under both design versions: reads `--v2-*` when present,
+   otherwise falls back to legacy `--panel-2` / `--text` / `--muted`.
+   The bubble is absolutely positioned relative to its inline wrapper;
+   no portal or floating-ui dependency.
+   ───────────────────────────────────────────────────────────── */
+.tooltip-root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tooltip-bubble {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) scale(0.96);
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: var(--v2-panel-lifted, var(--panel-2));
+  color: var(--v2-text-main, var(--text));
+  border: 1px solid var(--v2-border, var(--border));
+  font-size: 0.78rem;
+  line-height: 1.35;
+  font-family: var(--font-dm-sans), var(--font-inter), sans-serif;
+  white-space: nowrap;
+  max-width: 320px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  z-index: 1000;
+}
+
+.tooltip-bubble-top {
+  bottom: calc(100% + 6px);
+}
+
+.tooltip-bubble-bottom {
+  top: calc(100% + 6px);
+}
+
+.tooltip-bubble-open {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+/* ═════════════════════════════════════════════════════════════
+   R4 + R5 — v2 design system overlay
+
+   All rules below apply ONLY when <html data-design="v2">. With
+   the flag off (the default), these selectors don't match and
+   the legacy styling above governs. This keeps legacy visual
+   baselines zero-diff until R7 flips the flag.
+
+   Covers:
+     R4.2 Badge, R4.3 Button, R4.4 Card (+ accent stripe),
+     R4.5 KpiCard (new), R4.6 Tabs, R4.7 EmptyState (new),
+     R4.8 Panel (new), R5.1 Sidebar, R5.2 Topbar, R5.3 Breadcrumbs
+     (new), R5.4 AppShell
+
+   Source: plans/ui-improvement-plan.md finding #14 + mockup at
+   /Users/ajitkoti/Downloads/macp-console.jsx.
+   ═════════════════════════════════════════════════════════════ */
+
+/* Root body under v2 — set default typography + surface. */
+[data-design='v2'] body {
+  background: var(--v2-bg);
+  color: var(--v2-text-main);
+  font-family: var(--font-dm-sans), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* R5.4 — AppShell under v2: adopt content padding from mockup. */
+[data-design='v2'] .app-shell {
+  grid-template-columns: var(--v2-sidebar-w) 1fr;
+}
+[data-design='v2'] .app-main {
+  padding: var(--v2-content-pad);
+}
+
+/* R5.1 — Sidebar. */
+[data-design='v2'] .sidebar {
+  width: var(--v2-sidebar-w);
+  background: var(--v2-ink);
+  border-right: 1px solid var(--v2-ink-line);
+  padding: 0;
+}
+[data-design='v2'] .sidebar-brand {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--v2-ink-line);
+  background: transparent;
+}
+[data-design='v2'] .sidebar-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--v2-accent);
+  box-shadow: none;
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -0.5px;
+}
+[data-design='v2'] .sidebar-title {
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+[data-design='v2'] .sidebar-subtitle {
+  color: var(--v2-text-faint);
+  font-size: 11px;
+}
+[data-design='v2'] .sidebar-nav {
+  padding: 20px 12px 8px;
+}
+[data-design='v2'] .sidebar-link {
+  padding: 8px 10px;
+  margin-bottom: 1px;
+  border-radius: var(--radius-md);
+  color: #8b8fa8;
+  font-size: 13.5px;
+  font-weight: 400;
+  background: transparent;
+  transition:
+    background var(--v2-transition),
+    color var(--v2-transition);
+}
+[data-design='v2'] .sidebar-link:hover {
+  background: var(--v2-ink-muted);
+  color: #cbd0e0;
+}
+[data-design='v2'] .sidebar-link-active {
+  background: rgba(79, 110, 247, 0.14);
+  color: #fff;
+  font-weight: 500;
+}
+[data-design='v2'] .sidebar-footer {
+  padding: 14px 12px;
+  border-top: 1px solid var(--v2-ink-line);
+}
+
+/* R5.2 — Topbar. */
+[data-design='v2'] .topbar {
+  height: var(--v2-topbar-h);
+  min-height: var(--v2-topbar-h);
+  background: var(--v2-panel);
+  border-bottom: 1px solid var(--v2-border);
+  padding: 0 28px;
+  backdrop-filter: none;
+  gap: 16px;
+}
+[data-design='v2'] .topbar-left h1,
+[data-design='v2'] .topbar-title {
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--v2-text-main);
+  letter-spacing: -0.3px;
+}
+[data-design='v2'] .topbar-help,
+[data-design='v2'] .topbar-actions {
+  font-family: var(--font-dm-sans), sans-serif;
+}
+
+/* R5.3 — Breadcrumbs (new component). */
+[data-design='v2'] .breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--v2-text-sub);
+  font-family: var(--font-dm-sans), sans-serif;
+}
+[data-design='v2'] .breadcrumbs a {
+  color: var(--v2-text-sub);
+  text-decoration: none;
+  transition: color var(--v2-transition);
+}
+[data-design='v2'] .breadcrumbs a:hover {
+  color: var(--v2-accent);
+}
+[data-design='v2'] .breadcrumbs .breadcrumb-sep {
+  color: var(--v2-text-faint);
+  font-size: 11px;
+}
+[data-design='v2'] .breadcrumbs .breadcrumb-current {
+  color: var(--v2-text-main);
+  font-weight: 500;
+}
+
+/* R4.4 — Card. */
+[data-design='v2'] .card {
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  transition: box-shadow 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+[data-design='v2'] .card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+/* Colored top-stripe variants (opt-in via data-accent attribute). */
+[data-design='v2'] .card[data-accent]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+[data-design='v2'] .card[data-accent='blue']::before {
+  background: var(--v2-accent);
+}
+[data-design='v2'] .card[data-accent='green']::before {
+  background: var(--v2-green);
+}
+[data-design='v2'] .card[data-accent='amber']::before {
+  background: var(--v2-amber);
+}
+[data-design='v2'] .card[data-accent='violet']::before {
+  background: var(--v2-accent-2);
+}
+[data-design='v2'] .card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--v2-border);
+}
+[data-design='v2'] .card-title {
+  font-family: var(--font-syne), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--v2-text-main);
+}
+[data-design='v2'] .card-description {
+  color: var(--v2-text-faint);
+  font-size: 12px;
+  margin-top: 1px;
+}
+[data-design='v2'] .card-content {
+  padding: 20px;
+  color: var(--v2-text-main);
+}
+
+/* R4.5 — KpiCard. Reuses card shell; adds KPI-specific typography. */
+[data-design='v2'] .kpi-card {
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: box-shadow 0.15s ease;
+}
+[data-design='v2'] .kpi-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+[data-design='v2'] .kpi-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--v2-text-sub);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  font-family: var(--font-dm-sans), sans-serif;
+}
+[data-design='v2'] .kpi-value {
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  color: var(--v2-text-main);
+  letter-spacing: -1px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+[data-design='v2'] .kpi-meta {
+  font-size: 12px;
+  color: var(--v2-text-faint);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+/* Delta indicator inside KpiCard. */
+[data-design='v2'] .kpi-delta {
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+[data-design='v2'] .kpi-delta-up {
+  color: var(--v2-green);
+}
+[data-design='v2'] .kpi-delta-down {
+  color: var(--v2-red);
+}
+[data-design='v2'] .kpi-delta-neutral {
+  color: var(--v2-text-faint);
+}
+
+/* R4.3 — Button. */
+[data-design='v2'] .button {
+  padding: 7px 16px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  transition:
+    opacity var(--v2-transition),
+    transform 0.1s,
+    background var(--v2-transition),
+    color var(--v2-transition);
+  border: 1px solid transparent;
+}
+[data-design='v2'] .button:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+[data-design='v2'] .button:active {
+  transform: translateY(0);
+}
+[data-design='v2'] .button-primary {
+  background: var(--v2-accent);
+  color: #fff;
+}
+[data-design='v2'] .button-secondary {
+  background: var(--v2-panel-lifted);
+  color: var(--v2-text-main);
+  border-color: var(--v2-border);
+}
+[data-design='v2'] .button-ghost {
+  background: transparent;
+  color: var(--v2-text-sub);
+  border-color: var(--v2-border);
+}
+[data-design='v2'] .button-danger {
+  background: var(--v2-red);
+  color: #fff;
+}
+
+/* R4.2 — Badge. */
+[data-design='v2'] .badge {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  border: none;
+  letter-spacing: 0.1px;
+}
+[data-design='v2'] .badge-neutral {
+  background: var(--v2-panel-lifted);
+  color: var(--v2-text-sub);
+}
+[data-design='v2'] .badge-info {
+  background: var(--v2-accent-glow);
+  color: var(--v2-accent);
+}
+[data-design='v2'] .badge-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--v2-green);
+}
+[data-design='v2'] .badge-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--v2-amber);
+}
+[data-design='v2'] .badge-danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--v2-red);
+}
+
+/* R4.6 — Tabs. */
+[data-design='v2'] .tabs-list {
+  border-bottom: 1px solid var(--v2-border);
+  gap: 4px;
+}
+[data-design='v2'] .tabs-trigger {
+  padding: 10px 14px;
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v2-text-sub);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  transition: color var(--v2-transition);
+}
+[data-design='v2'] .tabs-trigger:hover {
+  color: var(--v2-text-main);
+}
+[data-design='v2'] .tabs-trigger-active {
+  color: var(--v2-accent);
+  border-bottom-color: var(--v2-accent);
+}
+
+/* R4.7 — EmptyState. */
+[data-design='v2'] .empty-state {
+  padding: 40px 24px;
+  text-align: center;
+  background: var(--v2-panel);
+  border: 1px dashed var(--v2-border);
+  border-radius: var(--radius-lg);
+  color: var(--v2-text-sub);
+}
+[data-design='v2'] .empty-state.compact {
+  padding: 24px 16px;
+}
+[data-design='v2'] .empty-state h4 {
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--v2-text-main);
+  margin: 8px 0 4px;
+}
+[data-design='v2'] .empty-state p {
+  font-size: 12.5px;
+  color: var(--v2-text-faint);
+}
+[data-design='v2'] .empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--v2-panel-lifted);
+  color: var(--v2-text-sub);
+  margin-bottom: 12px;
+}
+
+/* R4.8 — Panel (new primitive; used in place of ad-hoc Card+section-actions). */
+[data-design='v2'] .panel {
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+[data-design='v2'] .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--v2-border);
+}
+[data-design='v2'] .panel-title {
+  font-family: var(--font-syne), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--v2-text-main);
+  letter-spacing: -0.2px;
+}
+[data-design='v2'] .panel-subtitle {
+  font-size: 12px;
+  color: var(--v2-text-faint);
+  margin-top: 1px;
+}
+[data-design='v2'] .panel-action {
+  font-size: 12px;
+  color: var(--v2-accent);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.1s;
+  background: transparent;
+  border: none;
+  font-family: var(--font-dm-sans), sans-serif;
+}
+[data-design='v2'] .panel-action:hover {
+  opacity: 0.7;
+}
+[data-design='v2'] .panel-body {
+  padding: 20px;
+  color: var(--v2-text-main);
+}
+[data-design='v2'] .panel-body.tight {
+  padding: 0;
+}
+
+/* Text / numerics helper classes used across v2 primitives. */
+[data-design='v2'] .mono {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+[data-design='v2'] .display {
+  font-family: var(--font-syne), sans-serif;
+}
+
+/* Code / json-viewer — v2 overrides the near-black treatment with a
+   surface that fits the new palette better. */
+[data-design='v2'] .json-viewer {
+  background: var(--v2-panel-lifted);
+  color: var(--v2-text-main);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--radius-lg);
+}
+[data-design='v2'] code {
+  background: var(--v2-panel-lifted);
+  color: var(--v2-text-main);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--radius-sm);
+}
+
+/* Tables — align to v2 panel aesthetics. */
+[data-design='v2'] .table {
+  font-size: 13px;
+  font-family: var(--font-dm-sans), sans-serif;
+}
+[data-design='v2'] .table th {
+  color: var(--v2-text-sub);
+  font-weight: 500;
+  border-bottom: 1px solid var(--v2-border);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+}
+[data-design='v2'] .table td {
+  border-bottom: 1px solid var(--v2-border-subtle);
+  color: var(--v2-text-main);
+}
+[data-design='v2'] .table tr:hover td {
+  background: var(--v2-panel-lifted);
+}
+
+/* Inputs / fields. */
+[data-design='v2'] .field-input,
+[data-design='v2'] input.field-input,
+[data-design='v2'] select.field-input,
+[data-design='v2'] textarea.field-input {
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--radius-md);
+  color: var(--v2-text-main);
+  font-family: var(--font-dm-sans), sans-serif;
+  font-size: 13px;
+  padding: 8px 12px;
+  transition: border-color var(--v2-transition);
+}
+[data-design='v2'] .field-input:focus,
+[data-design='v2'] .field-input:focus-visible {
+  outline: 2px solid var(--v2-accent-glow);
+  outline-offset: 1px;
+  border-color: var(--v2-accent);
+}
+[data-design='v2'] .field-label {
+  font-size: 11.5px;
+  color: var(--v2-text-sub);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+}
+
+/* Scrollbars — subtle, v2-aligned. */
+[data-design='v2'] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-design='v2'] ::-webkit-scrollbar-thumb {
+  background: var(--v2-border);
+  border-radius: 3px;
+}
+
+/* Pulse-live keyframe — used by nav badge + run status dots. */
+@keyframes v2-pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+[data-design='v2'] .status-dot,
+[data-design='v2'] .live-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--v2-green);
+  animation: v2-pulse-live 1.5s infinite;
+}
+
+/* PR-A5 — EventDetailDialog (theme-aware via CSS variable fallbacks). */
+.event-detail-dialog {
+  padding: 0;
+  border: 1px solid var(--v2-border, var(--border));
+  border-radius: var(--radius-xl, 20px);
+  background: var(--v2-panel, var(--panel));
+  color: var(--v2-text-main, var(--text));
+  width: min(760px, 92vw);
+  max-width: none;
+  max-height: 85vh;
+  overflow: auto;
+  box-shadow: var(--shadow, 0 24px 60px rgba(0, 0, 0, 0.4));
+}
+.event-detail-dialog::backdrop {
+  background: rgba(11, 12, 16, 0.56);
+  backdrop-filter: blur(3px);
+}
+.event-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--v2-border, var(--border));
+  position: sticky;
+  top: 0;
+  background: inherit;
+}
+.event-detail-title {
+  font-family: var(--font-syne), sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+  color: var(--v2-text-main, var(--text));
+}
+.event-detail-subtitle {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--v2-text-faint, var(--muted));
+  margin-top: 2px;
+}
+.event-detail-meta {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 4px 14px;
+  padding: 14px 20px;
+  margin: 0;
+  border-bottom: 1px solid var(--v2-border-subtle, var(--border));
+}
+.event-detail-meta-row {
+  display: contents;
+}
+.event-detail-meta dt {
+  font-size: 11.5px;
+  color: var(--v2-text-sub, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  align-self: center;
+}
+.event-detail-meta dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--v2-text-main, var(--text));
+  font-family: var(--font-dm-sans), var(--font-inter), sans-serif;
+  word-break: break-word;
+}
+.event-detail-payload {
+  padding: 14px 20px 20px;
+}
+.event-detail-extra {
+  padding: 0 20px 20px;
 }

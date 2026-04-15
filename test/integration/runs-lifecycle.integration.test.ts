@@ -594,7 +594,8 @@ describe('Runs Lifecycle (integration)', () => {
       await getRunEvents(RUN_ID_1, false, 100);
 
       const lastReq = mocker.requests.at(-1)!;
-      expect(lastReq.url).toContain('?limit=100');
+      expect(lastReq.url).toContain('afterSeq=0');
+      expect(lastReq.url).toContain('limit=100');
     });
   });
 
