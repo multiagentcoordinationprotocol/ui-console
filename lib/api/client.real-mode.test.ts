@@ -288,48 +288,6 @@ describe('real mode API client', () => {
     });
   });
 
-  /* ─── sendRunMessage ─── */
-
-  describe('sendRunMessage', () => {
-    it('calls POST with typed body', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/messages`, () => ({
-        status: 200,
-        body: { ok: true, runId: RUN_ID_1 }
-      }));
-
-      const { sendRunMessage } = await import('@/lib/api/client');
-      const body = { from: 'agent-a', to: ['agent-b'], messageType: 'Proposal', payload: { value: 42 } };
-      const result = await sendRunMessage(RUN_ID_1, body, REAL);
-
-      expect(result).toEqual({ ok: true, runId: RUN_ID_1 });
-
-      const req = mocker.requests.find((r) => r.url.includes('/messages'));
-      expect(req!.method).toBe('POST');
-      expect(req!.body).toEqual(body);
-    });
-  });
-
-  /* ─── sendRunSignal ─── */
-
-  describe('sendRunSignal', () => {
-    it('calls POST with typed body', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/signal`, () => ({
-        status: 200,
-        body: { ok: true, runId: RUN_ID_1 }
-      }));
-
-      const { sendRunSignal } = await import('@/lib/api/client');
-      const body = { from: 'agent-a', to: ['agent-b'], messageType: 'Signal', signalType: 'interrupt' };
-      const result = await sendRunSignal(RUN_ID_1, body, REAL);
-
-      expect(result).toEqual({ ok: true, runId: RUN_ID_1 });
-
-      const req = mocker.requests.find((r) => r.url.includes('/signal'));
-      expect(req!.method).toBe('POST');
-      expect(req!.body).toEqual(body);
-    });
-  });
-
   /* ─── batchCancelRuns ─── */
 
   describe('batchCancelRuns', () => {

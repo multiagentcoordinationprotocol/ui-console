@@ -585,23 +585,6 @@ export interface AgentProfile {
   };
 }
 
-export interface SendRunMessageRequest {
-  from: string;
-  to?: string[];
-  messageType: string;
-  payload?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-}
-
-export interface SendSignalRequest {
-  from: string;
-  to: string[];
-  messageType: string;
-  payload?: Record<string, unknown>;
-  signalType?: string;
-  severity?: string;
-}
-
 export interface RunExportBundle {
   run: RunRecord;
   session: Record<string, unknown> | null;

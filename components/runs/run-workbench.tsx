@@ -14,7 +14,6 @@ import { NodeInspector } from '@/components/runs/node-inspector';
 import { DecisionPanel } from '@/components/runs/decision-panel';
 import { PolicyPanel } from '@/components/runs/policy-panel';
 import { RunOverviewCard } from '@/components/runs/run-overview-card';
-import { SessionInteractionPanel } from '@/components/runs/session-interaction-panel';
 import { SignalRail } from '@/components/runs/signal-rail';
 import { TimelineScrubber } from '@/components/runs/timeline-scrubber';
 import { Badge } from '@/components/ui/badge';
@@ -392,10 +391,6 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
         </ErrorBoundary>
         <SignalRail state={projectedState} runId={runId} />
       </div>
-
-      {liveMode && run.status === 'running' && (
-        <SessionInteractionPanel runId={runId} demoMode={demoMode} state={projectedState} />
-      )}
 
       <div className="split-layout">
         <div className="panel-stack">

@@ -64,8 +64,6 @@ import type {
   RuntimePolicyDescriptor,
   RuntimeRootDescriptor,
   ScenarioSummary,
-  SendRunMessageRequest,
-  SendSignalRequest,
   TraceSummary,
   ValidateRunResponse,
   WebhookSubscription
@@ -943,28 +941,6 @@ export function getQuickCompareTarget(runId: string): string {
 
 export function listScenarioRefs(): string[] {
   return listAllScenarios().map((scenario) => `${scenario.scenario}@${scenario.versions[0]}`);
-}
-
-/* ─── Send Message / Signal into live sessions ─── */
-
-export async function sendRunMessage(
-  runId: string,
-  body: SendRunMessageRequest,
-  demoMode: boolean
-): Promise<MutationAck> {
-  if (demoMode) return maybeDelay({ ok: true, runId });
-  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/messages`, {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
-}
-
-export async function sendRunSignal(runId: string, body: SendSignalRequest, demoMode: boolean): Promise<MutationAck> {
-  if (demoMode) return maybeDelay({ ok: true, runId });
-  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/signal`, {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
 }
 
 /* ─── Batch operations ─── */

@@ -101,11 +101,19 @@ authorization: Bearer <CONTROL_PLANE_API_KEY>
 
 ### Session interaction
 
-- `POST /runs/:id/messages` — inject a message into the live session (`{ from, to?, messageType, payload? }`)
-- `POST /runs/:id/signal` — inject a signal into the live session (`{ from, to, messageType, payload?, signalType?, severity? }`)
-- `POST /runs/:id/context` — update run context (`{ from, context }`)
+Under the direct-agent-auth architecture (see `plans/direct-agent-auth.md`), agents emit envelopes
+directly to the runtime via `macp-sdk-python` / `macp-sdk-typescript`. The following HTTP
+bypass endpoints are **removed** (410 Gone on the control-plane):
+
+- ~~`POST /runs/:id/messages`~~ — replaced by agent `MacpClient.send()`.
+- ~~`POST /runs/:id/signal`~~ — replaced by agent `MacpClient.sendSignal()`.
+- ~~`POST /runs/:id/context`~~ — replaced by agent-emitted `ContextUpdate` envelope via SDK.
+
+Still supported (scenario-agnostic, control-plane-local):
+
 - `POST /runs/:id/artifacts` — create an artifact (`{ kind, label, uri?, inline? }`)
 - `POST /runs/:id/projection/rebuild` — admin: rebuild state projection from events
+- `POST /runs/:id/cancel` — proxies to the initiator agent's cancel callback (or direct `CancelSession` when policy-delegated)
 
 ### Batch operations
 
@@ -186,8 +194,6 @@ Highlights:
 - `updateWebhook`
 - `deleteWebhook`
 - `resetCircuitBreaker`
-- `sendRunMessage`
-- `sendRunSignal`
 - `batchCancelRuns`
 - `batchArchiveRuns`
 - `batchDeleteRuns`
