@@ -147,8 +147,14 @@ jobs:
           path: test/e2e/visual/test-results/
           retention-days: 14
 
+      # `always()` is required because the regenerate step above exits
+      # non-zero whenever it writes new snapshots (Playwright reports
+      # "A snapshot doesn't exist ... writing actual" as a failure even
+      # though the PNG is written). Without always(), this upload step
+      # is skipped on the very runs that produce the baselines we want.
       - name: Upload regenerated baselines (manual runs only)
         if: >-
+          always() &&
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.update_visual_baselines == 'true'
         uses: actions/upload-artifact@v4
