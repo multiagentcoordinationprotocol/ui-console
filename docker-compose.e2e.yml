@@ -7,6 +7,26 @@
 #   docker compose -f docker-compose.e2e.yml down -v
 
 services:
+  auth-service:
+    build:
+      context: ../auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "3200:3200"
+    environment:
+      PORT: "3200"
+      MACP_AUTH_ISSUER: macp-auth-service
+      MACP_AUTH_AUDIENCE: macp-runtime
+      MACP_AUTH_MAX_TTL_SECONDS: "3600"
+      MACP_AUTH_DEFAULT_TTL_SECONDS: "300"
+      # MACP_AUTH_SIGNING_KEY_JSON: unset → ephemeral key (dev only)
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3200/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
   postgres:
     image: postgres:16-alpine
     ports:
@@ -36,25 +56,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  auth-service:
-    image: node:20-alpine
-    working_dir: /app
-    command: node dist/index.js
-    environment:
-      PORT: "3200"
-      MACP_AUTH_ISSUER: macp-auth-service
-      MACP_AUTH_AUDIENCE: macp-runtime
-    volumes:
-      - ../auth-service:/app:ro
-    ports:
-      - "3200:3200"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3200/healthz"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-      start_period: 3s
 
   runtime:
     image: ${MACP_RUNTIME_IMAGE:-macp-runtime:latest}
