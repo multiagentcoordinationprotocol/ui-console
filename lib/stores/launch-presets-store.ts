@@ -16,6 +16,8 @@ export interface LaunchPreset {
   tags: string;
   actorId: string;
   runLabel: string;
+  contextId?: string;
+  extensionKeys?: string;
 }
 
 interface LaunchPresetsState {

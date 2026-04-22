@@ -51,9 +51,39 @@ describe('Dashboard (integration)', () => {
     expect(result.kpis).toBeDefined();
     expect(result.kpis.totalRuns).toBe(42);
     expect(result.kpis.activeRuns).toBe(3);
-    expect(result.runs).toHaveLength(5);
+    // CP overview now includes `recentRuns`; the client prefers those
+    // over a separate listRuns round-trip. The fixture embeds two.
+    expect(result.runs).toHaveLength(2);
     expect(result.packs).toHaveLength(2);
     expect(result.runtimeHealth.ok).toBe(true);
+  });
+
+  it('falls back to listRuns when CP overview omits recentRuns', async () => {
+    // Older CP builds don't include recentRuns — confirm the client
+    // still populates runs by calling listRuns.
+    const overviewWithoutRecentRuns = { ...dashboardOverview() } as Record<string, unknown>;
+    delete overviewWithoutRecentRuns.recentRuns;
+    mocker.on('GET', '/api/proxy/control-plane/dashboard/overview', () => ({
+      status: 200,
+      body: overviewWithoutRecentRuns
+    }));
+    mocker.onPrefix('GET', '/api/proxy/control-plane/runs', () => ({
+      status: 200,
+      body: runsListResponse(5)
+    }));
+    mocker.on('GET', '/api/proxy/example/packs', () => ({
+      status: 200,
+      body: packsList()
+    }));
+    mocker.on('GET', '/api/proxy/control-plane/runtime/health', () => ({
+      status: 200,
+      body: runtimeHealth()
+    }));
+
+    const { getDashboardOverview } = await import('@/lib/api/client');
+    const result = await getDashboardOverview(false);
+
+    expect(result.runs).toHaveLength(5);
   });
 
   it('returns run breakdown counts from CP kpis', async () => {

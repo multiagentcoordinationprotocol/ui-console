@@ -18,10 +18,11 @@ import { formatDateTime, formatNumber, formatPercent, titleCase } from '@/lib/ut
 function matchEventToNode(event: CanonicalEvent, nodeId: string) {
   if (event.subject?.id === nodeId) return true;
   if (event.subject?.kind === 'participant' && event.subject.id === nodeId) return true;
+  const sender = String(event.data.sender ?? '');
   const participantId = String(event.data.participantId ?? event.data.participant ?? '');
   const from = String(event.data.from ?? '');
   const to = Array.isArray(event.data.to) ? event.data.to.map(String) : [];
-  return participantId === nodeId || from === nodeId || to.includes(nodeId);
+  return sender === nodeId || participantId === nodeId || from === nodeId || to.includes(nodeId);
 }
 
 export function NodeInspector({
@@ -30,8 +31,7 @@ export function NodeInspector({
   selectedNodeId,
   metrics,
   traceSummary,
-  artifacts,
-  messages
+  artifacts
 }: {
   state: RunStateProjection;
   events: CanonicalEvent[];
@@ -39,7 +39,6 @@ export function NodeInspector({
   metrics?: MetricsSummary;
   traceSummary?: TraceSummary;
   artifacts?: Artifact[];
-  messages?: Record<string, unknown>[];
 }) {
   const selectedNode = useMemo(
     () => state.graph.nodes.find((node) => node.id === (selectedNodeId ?? state.graph.nodes[0]?.id)),
@@ -75,23 +74,18 @@ export function NodeInspector({
       events
         .filter((event) => event.type === 'llm.call.completed')
         .filter((event) => {
+          if (!selectedNode) return false;
+          // CP carries the participantId on subject.id; some scenarios
+          // also inline it into event.data. Accept either.
           const data = event.data as Partial<LlmCallCompletedData>;
-          const fromData = data.participantId === selectedNode?.id;
-          return fromData || (selectedNode ? matchEventToNode(event, selectedNode.id) : false);
+          if (event.subject?.id === selectedNode.id) return true;
+          if (data.participantId === selectedNode.id) return true;
+          return matchEventToNode(event, selectedNode.id);
         })
         .slice(-20)
         .reverse(),
     [events, selectedNode]
   );
-
-  const relevantMessages = useMemo(() => {
-    if (!selectedNode) return [];
-    return (messages ?? []).filter((message) => {
-      const from = String(message.from ?? '');
-      const recipients = Array.isArray(message.to) ? message.to.map(String) : [];
-      return from === selectedNode.id || recipients.includes(selectedNode.id);
-    });
-  }, [messages, selectedNode]);
 
   const relatedArtifacts = useMemo(() => {
     if (!selectedNode) return artifacts ?? [];
@@ -172,8 +166,7 @@ export function NodeInspector({
                       node: selectedNode,
                       participant,
                       latestProgress,
-                      latestDecision,
-                      outboundMessages: relevantMessages
+                      latestDecision
                     }}
                   />
                 </div>
@@ -187,8 +180,7 @@ export function NodeInspector({
                   <JsonViewer
                     value={{
                       latestEvent: latestEvent?.data ?? {},
-                      decision: latestDecision,
-                      messages: relevantMessages
+                      decision: latestDecision
                     }}
                   />
                 </div>
@@ -283,11 +275,22 @@ export function NodeInspector({
                           const model = data.model ?? 'unknown';
                           const promptTokens = data.promptTokens ?? 0;
                           const completionTokens = data.completionTokens ?? 0;
-                          const totalTokens = promptTokens + completionTokens;
+                          const totalTokens = data.totalTokens ?? promptTokens + completionTokens;
                           const latency = data.latencyMs;
-                          const promptText = data.redactedPrompt ?? data.prompt ?? '';
-                          const responseText = data.response ?? '';
-                          const redacted = Boolean(data.redactedPrompt && !data.prompt);
+                          const provider = data.provider;
+                          const cost = data.estimatedCostUsd;
+                          const artifactId = data.artifactId;
+                          const toText = (value: unknown): string => {
+                            if (value == null) return '';
+                            if (typeof value === 'string') return value;
+                            try {
+                              return JSON.stringify(value, null, 2);
+                            } catch {
+                              return String(value);
+                            }
+                          };
+                          const promptText = toText(data.prompt);
+                          const responseText = toText(data.response);
                           return (
                             <details key={event.id} className="list-item" style={{ padding: 'var(--space-md, 12px)' }}>
                               <summary
@@ -300,6 +303,7 @@ export function NodeInspector({
                                 }}
                               >
                                 <code className="mono">{model}</code>
+                                {provider ? <Badge label={provider} tone="info" /> : null}
                                 <span className="mono muted small">
                                   {formatNumber(promptTokens)} → {formatNumber(completionTokens)} · Σ
                                   {formatNumber(totalTokens)}
@@ -307,21 +311,18 @@ export function NodeInspector({
                                 {typeof latency === 'number' ? (
                                   <span className="mono muted small">{latency}ms</span>
                                 ) : null}
+                                {typeof cost === 'number' ? (
+                                  <span className="mono muted small">${cost.toFixed(4)}</span>
+                                ) : null}
                                 <span className="muted small" style={{ marginLeft: 'auto' }}>
                                   seq {event.seq} · {formatDateTime(event.ts)}
                                 </span>
-                                {redacted ? <Badge label="redacted" tone="warning" /> : null}
                               </summary>
                               <div className="stack" style={{ marginTop: 10, gap: 10 }}>
                                 {promptText ? (
                                   <div>
                                     <div className="muted small" style={{ marginBottom: 4 }}>
                                       Prompt
-                                      {redacted ? (
-                                        <span className="muted small" style={{ marginLeft: 6 }}>
-                                          (redacted — see RedactionService)
-                                        </span>
-                                      ) : null}
                                     </div>
                                     <pre className="json-viewer" style={{ maxHeight: 240, whiteSpace: 'pre-wrap' }}>
                                       {promptText}
@@ -338,20 +339,9 @@ export function NodeInspector({
                                     </pre>
                                   </div>
                                 ) : null}
-                                {data.contextRef?.artifactId || data.contextRef?.uri ? (
+                                {artifactId ? (
                                   <div className="muted small">
-                                    Context:{' '}
-                                    {data.contextRef.artifactId ? (
-                                      <code>artifact:{data.contextRef.artifactId}</code>
-                                    ) : (
-                                      <code>{data.contextRef.uri}</code>
-                                    )}
-                                  </div>
-                                ) : null}
-                                {data.resultingEventIds && data.resultingEventIds.length > 0 ? (
-                                  <div className="muted small">
-                                    Resulted in {data.resultingEventIds.length} event
-                                    {data.resultingEventIds.length === 1 ? '' : 's'}
+                                    Context artifact: <code>{artifactId}</code>
                                   </div>
                                 ) : null}
                               </div>

@@ -322,21 +322,7 @@ describe('Observability (integration)', () => {
     });
   });
 
-  describe('Run context and artifacts (write)', () => {
-    it('updateRunContext sends context payload', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/context`, () => ({
-        status: 200,
-        body: { ok: true }
-      }));
-
-      const { updateRunContext } = await import('@/lib/api/client');
-      await updateRunContext(RUN_ID_1, { from: 'agent-a', context: { score: 0.95 } }, false);
-
-      const postBody = mocker.requests.at(-1)!.body as Record<string, unknown>;
-      expect(postBody.from).toBe('agent-a');
-      expect(postBody.context).toEqual({ score: 0.95 });
-    });
-
+  describe('Artifacts (write)', () => {
     it('createArtifact sends artifact payload', async () => {
       mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/artifacts`, () => ({
         status: 201,

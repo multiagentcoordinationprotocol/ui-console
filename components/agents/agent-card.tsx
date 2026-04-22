@@ -18,22 +18,34 @@ export function AgentCard({ agent }: { agent: AgentProfile }) {
             <Badge key={tag} label={tag} />
           ))}
         </div>
-        <div className="metric-strip">
-          <div className="metric-box">
-            <div className="muted small">Runs</div>
-            <div className="metric-box-value">{agent.metrics.runs}</div>
-          </div>
-          <div className="metric-box">
-            <div className="muted small">Signals</div>
-            <div className="metric-box-value">{agent.metrics.signals}</div>
-          </div>
-          <div className="metric-box">
-            <div className="muted small">Avg latency</div>
-            <div className="metric-box-value">
-              {agent.metrics.averageLatencyMs != null ? `${agent.metrics.averageLatencyMs}ms` : 'N/A'}
+        {agent.metrics && (
+          <div className="metric-strip">
+            <div className="metric-box">
+              <div className="muted small">Runs</div>
+              <div className="metric-box-value">{agent.metrics.runs}</div>
+            </div>
+            <div className="metric-box">
+              <div className="muted small">Signals</div>
+              <div className="metric-box-value">{agent.metrics.signals}</div>
+            </div>
+            <div className="metric-box">
+              <div className="muted small">Avg latency</div>
+              <div className="metric-box-value">
+                {agent.metrics.averageLatencyMs != null ? `${agent.metrics.averageLatencyMs}ms` : '—'}
+              </div>
             </div>
           </div>
-        </div>
+        )}
+        {agent.scenarios.length > 0 && (
+          <div className="inline-list">
+            {agent.scenarios.slice(0, 3).map((s) => (
+              <Link key={s} href={`/scenarios?search=${encodeURIComponent(s.split('@')[0])}`}>
+                <Badge label={s.split('/').pop()?.split('@')[0] ?? s} tone="neutral" />
+              </Link>
+            ))}
+            {agent.scenarios.length > 3 && <Badge label={`+${agent.scenarios.length - 3} more`} tone="neutral" />}
+          </div>
+        )}
         <Link href={`/agents/${agent.agentRef}`} className="button button-secondary">
           Open agent
         </Link>

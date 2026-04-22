@@ -96,7 +96,9 @@ export function DecisionPanel({
         <div className="inline-list">
           <StatusBadge status={run.status} />
           {run.metadata?.modeName || state.run.modeName ? (
-            <Badge label={String(run.metadata?.modeName ?? state.run.modeName)} tone="info" />
+            <Link href={`/modes/${encodeURIComponent(String(run.metadata?.modeName ?? state.run.modeName))}`}>
+              <Badge label={String(run.metadata?.modeName ?? state.run.modeName)} tone="info" />
+            </Link>
           ) : null}
           {run.metadata?.environment || process.env.NEXT_PUBLIC_MACP_ENVIRONMENT_LABEL ? (
             <Badge label={String(run.metadata?.environment ?? process.env.NEXT_PUBLIC_MACP_ENVIRONMENT_LABEL)} />

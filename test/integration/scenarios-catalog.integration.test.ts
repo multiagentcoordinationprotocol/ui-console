@@ -155,8 +155,8 @@ describe('Scenarios Catalog (integration)', () => {
         false
       );
 
-      expect(result.executionRequest.mode).toBe('live');
-      expect(result.executionRequest.session.modeName).toBe('macp.mode.decision.v1');
+      expect(result.mode).toBe('live');
+      expect(result.runDescriptor.session.modeName).toBe('macp.mode.decision.v1');
       expect(result.display.title).toBe('High-Value New-Device Transaction');
       expect(result.participantBindings).toHaveLength(2);
 
@@ -174,14 +174,7 @@ describe('Scenarios Catalog (integration)', () => {
         body: {
           compiled: compileLaunchResult(),
           hostedAgents: [{ agentRef: 'fraud-detector', participantId: 'fraud-detector', status: 'bootstrapped' }],
-          controlPlane: {
-            baseUrl: 'http://localhost:3001',
-            validated: true,
-            submitted: true,
-            runId: '00000000-0000-0000-0000-000000000001',
-            status: 'running',
-            traceId: 'trace-001'
-          }
+          sessionId: '00000000-0000-0000-0000-000000000001'
         }
       }));
 
@@ -190,13 +183,12 @@ describe('Scenarios Catalog (integration)', () => {
         {
           scenarioRef: 'fraud/high-value-new-device@1.0.0',
           inputs: { transactionAmount: 5000 },
-          bootstrapAgents: true,
-          submitToControlPlane: true
+          bootstrapAgents: true
         },
         false
       );
 
-      expect(result.controlPlane).toHaveProperty('runId');
+      expect(result.sessionId).toBeDefined();
       expect(result.hostedAgents).toBeDefined();
     });
   });
@@ -214,7 +206,7 @@ describe('Scenarios Catalog (integration)', () => {
       expect(agents).toHaveLength(2);
       expect(agents[0].agentRef).toBe('fraud-detector');
       expect(agents[0].framework).toBe('langchain');
-      expect(agents[0].metrics.runs).toBe(24);
+      expect(agents[0].metrics?.runs).toBe(24);
     });
 
     it('getAgentProfile returns single agent by ref', async () => {

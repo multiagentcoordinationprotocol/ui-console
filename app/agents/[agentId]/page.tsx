@@ -81,22 +81,24 @@ export default function AgentDetailPage() {
                 <Badge key={tag} label={tag} />
               ))}
             </div>
-            <div className="metric-strip">
-              <div className="metric-box">
-                <div className="muted small">Runs</div>
-                <div className="metric-box-value">{agent.metrics.runs}</div>
-              </div>
-              <div className="metric-box">
-                <div className="muted small">Signals</div>
-                <div className="metric-box-value">{agent.metrics.signals}</div>
-              </div>
-              <div className="metric-box">
-                <div className="muted small">Avg latency</div>
-                <div className="metric-box-value">
-                  {agent.metrics.averageLatencyMs != null ? `${agent.metrics.averageLatencyMs}ms` : 'N/A'}
+            {agent.metrics && (
+              <div className="metric-strip">
+                <div className="metric-box">
+                  <div className="muted small">Runs</div>
+                  <div className="metric-box-value">{agent.metrics.runs}</div>
+                </div>
+                <div className="metric-box">
+                  <div className="muted small">Signals</div>
+                  <div className="metric-box-value">{agent.metrics.signals}</div>
+                </div>
+                <div className="metric-box">
+                  <div className="muted small">Avg latency</div>
+                  <div className="metric-box-value">
+                    {agent.metrics.averageLatencyMs != null ? `${agent.metrics.averageLatencyMs}ms` : '—'}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             <JsonViewer value={agent} />
           </CardContent>
         </Card>

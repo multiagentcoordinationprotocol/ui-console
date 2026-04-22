@@ -75,7 +75,7 @@ authorization: Bearer <CONTROL_PLANE_API_KEY>
 
 ### Dashboard
 
-- `GET /dashboard/overview` — aggregated KPIs and chart data (includes totalTokens, totalCostUsd when available); supports `timeRange` query param (`24h`, `7d`, `30d`)
+- `GET /dashboard/overview` — aggregated KPIs, `recentRuns`, `runtimeHealth`, and chart data. Supports `window` (`15m | 1h | 6h | 24h | 7d | 30d`), `from` / `to` (ISO-8601, mutually exclusive with `window`), `scenarioRef`, and `environment`. KPIs include `totalTokens` and `totalCostUsd` when available. Chart series: `runVolume`, `latency`, `errorClasses`, `signalVolume`, `throughput`, `queueDepth`, `latencyP50` / `P95` / `P99`, `cost`, `successRate`, `decisionOutcome` (single net series, not split positive/negative), and `perScenario`. The client prefers `recentRuns` when CP provides it and falls back to `GET /runs` when an older CP build omits the field.
 - `GET /dashboard/agents/metrics` — per-agent run counts, signal counts, latency, and confidence
 
 ### Run lifecycle
@@ -93,11 +93,14 @@ authorization: Bearer <CONTROL_PLANE_API_KEY>
 
 ### Run state and streaming
 
-- `GET /runs/:id/state` — response now includes optional `policy` projection
-- `GET /runs/:id/events` — supports `?limit=<n>` for pagination (default 500)
-- `GET /runs/:id/stream` — SSE stream with `?includeSnapshot=true&afterSeq=<n>`
+- `GET /runs/:id/state` — response includes optional `policy` projection, optional `llm` projection (`{ calls[], totals: { callCount, promptTokens, completionTokens, totalTokens, estimatedCostUsd } }`), `contextId`, and `extensionKeys` in the `run` object
+- `GET /runs/:id/events` — supports `?limit=<n>` for pagination (default 500). Returns a bare array when no filters are set, or `{ data, total, limit, nextCursor }` when any of `afterSeq`, `afterTs`, `beforeTs`, or `type` is present. The client handles both shapes.
+- `GET /events` — cross-run canonical events with `runId`, `scenarioRef`, `type` (CSV), `afterSeq`, `afterTs`, `beforeTs`, `limit`. Returns `{ data, total, nextCursor }`. The client falls back to per-run fan-out when this endpoint is unavailable.
+- `GET /runs/:id/stream` — SSE stream with `?includeSnapshot=true&afterSeq=<n>`. Emits `snapshot`, `canonical_event`, and `heartbeat` events.
 - `GET /runs/:id/export` — full run bundle (run, projection, events, artifacts, metrics)
 - `DELETE /runs/:id` — permanently delete a completed/failed/cancelled run
+
+`POST /runs` returns `{ runId, sessionId, status, traceId }`. In the observer-only CP model `sessionId === runId`, but both fields are declared on `CreateRunResponse`. The CP rejects any request body with `kickoff[]`, `participants[].role`, `commitments[]`, `policyHints`, or `initiatorParticipantId` (`forbidNonWhitelisted: true`). The UI only calls `POST /runs` with a compiled `RunDescriptor` from the examples-service, which is already whitelisted-safe. `POST /runs/:id/clone` rejects non-empty `context` overrides.
 
 ### Session interaction
 
@@ -126,7 +129,6 @@ Still supported (scenario-agnostic, control-plane-local):
 - `GET /runs/:id/metrics` — now includes `promptTokens`, `completionTokens`, `totalTokens`, `estimatedCostUsd`
 - `GET /runs/:id/traces`
 - `GET /runs/:id/artifacts`
-- `GET /runs/:id/messages`
 - `GET /metrics` — raw Prometheus metrics
 - `GET /audit` — supports `?limit=<n>&offset=<n>` for pagination (default limit 100)
 
@@ -160,7 +162,7 @@ Highlights:
 - `listScenarios`
 - `getLaunchSchema`
 - `compileLaunch`
-- `runExample` — one-shot bootstrap via Example Service `/examples/run`
+- `runExample` — one-shot bootstrap via Example Service `/examples/run`. Returns `{ compiled, hostedAgents, sessionId }`. The `sessionId` is used as the run ID for navigation (session discovery model: sessionId = runId for auto-discovered sessions).
 - `validateRun`
 - `createRun`
 - `listRuns`
@@ -170,7 +172,6 @@ Highlights:
 - `getRunMetrics`
 - `getRunTraces`
 - `getRunArtifacts`
-- `getRunMessages`
 - `cancelRun`
 - `cloneRun`
 - `archiveRun`
@@ -200,7 +201,6 @@ Highlights:
 - `batchExportRuns`
 - `exportRunBundle`
 - `rebuildProjection`
-- `updateRunContext`
 - `createArtifact`
 - `deleteRun`
 - `getReadinessProbe`

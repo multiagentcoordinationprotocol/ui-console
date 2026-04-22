@@ -157,15 +157,15 @@ function RunHistoryContent() {
         <Card>
           <CardContent className="kpi-card">
             <div className="kpi-label">Tokens</div>
-            <div className="kpi-value">{formatNumber(aggregate.totalTokens)}</div>
-            <div className="kpi-meta">Prompt + completion usage</div>
+            <div className="kpi-value">{aggregate.totalTokens > 0 ? formatNumber(aggregate.totalTokens) : '—'}</div>
+            <div className="kpi-meta">{aggregate.totalTokens > 0 ? 'Prompt + completion usage' : 'No token data'}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="kpi-card">
             <div className="kpi-label">Estimated cost</div>
-            <div className="kpi-value">{formatCurrency(aggregate.totalCost)}</div>
-            <div className="kpi-meta">Across the filtered sample</div>
+            <div className="kpi-value">{aggregate.totalCost > 0 ? formatCurrency(aggregate.totalCost) : '—'}</div>
+            <div className="kpi-meta">{aggregate.totalCost > 0 ? 'Across the filtered sample' : 'No cost data'}</div>
           </CardContent>
         </Card>
       </div>

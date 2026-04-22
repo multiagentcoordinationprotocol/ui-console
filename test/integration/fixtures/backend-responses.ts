@@ -85,6 +85,28 @@ export function runStateProjection(runId: string) {
       commitmentEvaluations: [
         { commitmentId: 'eval-001', decision: 'allow', reasons: ['Threshold met'], ts: '2026-04-01T10:04:00Z' }
       ]
+    },
+    llm: {
+      calls: [
+        {
+          participantId: 'agent-a',
+          model: 'claude-sonnet-4-6',
+          promptTokens: 1200,
+          completionTokens: 300,
+          totalTokens: 1500,
+          latencyMs: 540,
+          estimatedCostUsd: 0.0081,
+          ts: '2026-04-01T10:00:03Z',
+          messageId: 'msg-llm-1'
+        }
+      ],
+      totals: {
+        callCount: 1,
+        promptTokens: 1200,
+        completionTokens: 300,
+        totalTokens: 1500,
+        estimatedCostUsd: 0.0081
+      }
     }
   };
 }
@@ -170,8 +192,18 @@ export function dashboardOverview() {
       runVolume: { labels: ['Mon', 'Tue', 'Wed'], data: [10, 12, 8] },
       latency: { labels: ['Mon', 'Tue', 'Wed'], data: [200, 180, 210] },
       errorClasses: { labels: ['timeout', 'validation'], data: [3, 1] },
-      signalVolume: { labels: ['Mon', 'Tue', 'Wed'], data: [30, 40, 50] }
+      signalVolume: { labels: ['Mon', 'Tue', 'Wed'], data: [30, 40, 50] },
+      throughput: { labels: ['Mon', 'Tue', 'Wed'], data: [9, 11, 7] },
+      queueDepth: { labels: ['Mon', 'Tue', 'Wed'], data: [2, 1, 3] },
+      latencyP50: { labels: ['Mon', 'Tue', 'Wed'], data: [150, 140, 160] },
+      latencyP95: { labels: ['Mon', 'Tue', 'Wed'], data: [420, 380, 440] },
+      latencyP99: { labels: ['Mon', 'Tue', 'Wed'], data: [900, 820, 980] },
+      cost: { labels: ['Mon', 'Tue', 'Wed'], data: [1.1, 1.3, 1.0] },
+      successRate: { labels: ['Mon', 'Tue', 'Wed'], data: [92, 88, 95] },
+      decisionOutcome: { labels: ['Mon', 'Tue', 'Wed'], data: [5, -1, 3] },
+      perScenario: { labels: ['fraud', 'lending', 'compliance'], data: [18, 12, 4] }
     },
+    recentRuns: [runRecord(RUN_ID_1, { status: 'running' }), runRecord(RUN_ID_2, { status: 'completed' })],
     runtimeHealth: { ok: true, runtimeKind: 'rust', detail: 'healthy' }
   };
 }
@@ -258,7 +290,8 @@ export function validateRunResponse(valid = true) {
 }
 
 export function createRunResponse(runId = RUN_ID_1) {
-  return { runId, status: 'queued', traceId: TRACE_ID };
+  // CP `POST /runs` now also returns sessionId alongside runId.
+  return { runId, sessionId: runId, status: 'queued', traceId: TRACE_ID };
 }
 
 export function readinessProbe() {
@@ -375,30 +408,38 @@ export function launchSchema(scenarioRef = 'high-value-new-device') {
 
 export function compileLaunchResult() {
   return {
-    executionRequest: {
+    runDescriptor: {
       mode: 'live',
       runtime: { kind: 'rust', version: 'v1' },
       session: {
+        sessionId: '00000000-0000-4000-8000-0000ca7a1001',
         modeName: 'macp.mode.decision.v1',
         modeVersion: '1.0.0',
         configurationVersion: '1.0.0',
         ttlMs: 300000,
-        initiatorParticipantId: 'fraud-detector',
-        participants: [
-          { id: 'fraud-detector', role: 'proposer', transportIdentity: 'grpc://fraud-detector:50051' },
-          { id: 'risk-assessor', role: 'evaluator', transportIdentity: 'grpc://risk-assessor:50052' }
-        ],
+        participants: [{ id: 'fraud-detector' }, { id: 'risk-assessor' }]
+      }
+    },
+    initiator: {
+      participantId: 'fraud-detector',
+      sessionStart: {
+        intent: 'evaluate transaction',
+        participants: ['fraud-detector', 'risk-assessor'],
+        ttlMs: 300000,
+        modeVersion: '1.0.0',
+        configurationVersion: '1.0.0',
         context: { transactionAmount: 5000 }
       },
-      kickoff: [
-        {
-          from: 'fraud-detector',
-          to: ['risk-assessor'],
-          kind: 'proposal',
-          messageType: 'FraudAnalysis',
-          payload: { transactionAmount: 5000 }
-        }
-      ]
+      kickoff: {
+        messageType: 'FraudAnalysis',
+        payload: { transactionAmount: 5000 }
+      }
+    },
+    sessionId: '00000000-0000-4000-8000-0000ca7a1001',
+    mode: 'live',
+    scenarioMeta: {
+      sessionContext: { transactionAmount: 5000 },
+      initiatorParticipantId: 'fraud-detector'
     },
     display: {
       title: 'High-Value New-Device Transaction',
@@ -429,29 +470,6 @@ export function batchExportResponse(runIds: string[]) {
     metrics: metricsSummary(id),
     exportedAt: new Date().toISOString()
   }));
-}
-
-export function runMessages(runId: string) {
-  return [
-    {
-      id: 'msg-1',
-      runId,
-      from: 'fraud-detector',
-      to: ['risk-assessor'],
-      messageType: 'Signal',
-      payload: { score: 0.85 },
-      ts: '2026-04-01T10:01:00Z'
-    },
-    {
-      id: 'msg-2',
-      runId,
-      from: 'risk-assessor',
-      to: ['fraud-detector'],
-      messageType: 'Evaluation',
-      payload: { approved: true },
-      ts: '2026-04-01T10:02:00Z'
-    }
-  ];
 }
 
 export function prometheusMetrics() {

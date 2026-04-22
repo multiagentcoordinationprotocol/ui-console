@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Enable invocation as a reusable workflow (e.g. deploy.yml calls this
+  # via `uses: ./.github/workflows/ci.yml`). Without this trigger GitHub
+  # rejects the caller at workflow-load time.
+  workflow_call:
   workflow_dispatch:
     inputs:
       run_integration_tests:
@@ -121,10 +125,17 @@ jobs:
           github.event.inputs.update_visual_baselines != 'true'
         run: npm run test:e2e:visual
 
+      # `continue-on-error: true` is the core fix: Playwright exits with
+      # code 1 for every test that had to write a new baseline (it
+      # reports the initial write as a failed comparison). On the
+      # update_visual_baselines=true path that's the intended outcome,
+      # not a real failure — so we let the step "fail" without failing
+      # the job, and downstream steps see success().
       - name: Regenerate missing visual baselines (manual)
         if: >-
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.update_visual_baselines == 'true'
+        continue-on-error: true
         run: npx playwright test --config playwright.visual.config.ts --update-snapshots=missing
 
       - name: Upload Playwright report
@@ -143,8 +154,14 @@ jobs:
           path: test/e2e/visual/test-results/
           retention-days: 14
 
+      # `always()` is kept as a safety net: the regenerate step uses
+      # continue-on-error, so this step should already run in the
+      # normal case, but always() ensures the baselines are still
+      # uploaded if the step ever times out or errors in an
+      # unexpected way.
       - name: Upload regenerated baselines (manual runs only)
         if: >-
+          always() &&
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.update_visual_baselines == 'true'
         uses: actions/upload-artifact@v4

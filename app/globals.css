@@ -585,11 +585,41 @@ button {
   grid-template-columns: 1.2fr 0.8fr;
   gap: 16px;
 }
+.triple-column-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
 .triple-layout {
   display: grid;
   grid-template-columns: 1.25fr 1fr 0.9fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+/* Equal-height cards inside the triple-layout. Inner scroll containers
+   (`.timeline-list`, `.signal-list`, `.tabs-panel`) handle overflow.
+   Note: ErrorBoundary doesn't add a DOM node so .card is a direct child. */
+.triple-layout > .card {
+  display: flex;
+  flex-direction: column;
+  max-height: 560px;
+  min-height: 0;
+}
+.triple-layout > .card > .card-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.triple-layout .signal-list,
+.triple-layout .timeline-list,
+.triple-layout .tabs-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .panel-stack {
   display: flex;
@@ -820,6 +850,7 @@ button {
   .grid-3,
   .grid-2,
   .split-layout,
+  .triple-column-layout,
   .metric-strip,
   .code-grid,
   .field-grid {
