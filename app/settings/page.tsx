@@ -12,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { FieldLabel, Input, Select } from '@/components/ui/field';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { LoadingPanel, ErrorPanel } from '@/components/ui/state-panels';
-import { PolicyManagement } from '@/components/settings/policy-management';
 import {
   createWebhook,
   deleteWebhook,
@@ -509,7 +508,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
-      <PolicyManagement demoMode={demoMode} />
+      {/* PolicyManagement moved to /policies per Q4/Q28/Q29 decisions. */}
       <ConfirmationDialog
         open={confirmation.state.open}
         title={confirmation.state.title}

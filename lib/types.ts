@@ -32,12 +32,37 @@ export interface CommitmentEvaluation {
   ts: string;
 }
 
+/** BE-8 — commitment definition carried into the projection. */
+export interface ExpectedCommitment {
+  commitmentId: string;
+  title?: string;
+  description?: string;
+  requiredRoles?: string[];
+}
+
+/** BE-9 — structured vote tally per commitment. */
+export interface CommitmentVoteTally {
+  commitmentId: string;
+  allow: number;
+  deny: number;
+  threshold: number;
+  quorum: { required: number; cast: number };
+}
+
+export type QuorumStatus = 'pending' | 'reached' | 'failed';
+
 export interface PolicyProjection {
   policyVersion: string;
   policyDescription?: string;
   resolvedAt?: string;
   outcomePositive?: boolean;
   commitmentEvaluations: CommitmentEvaluation[];
+  /** BE-8 / §2.4 — expected commitments, populated at binding_session time. */
+  expectedCommitments?: ExpectedCommitment[];
+  /** BE-9 / §2.5 — per-commitment tally of in-progress voting. */
+  voteTally?: CommitmentVoteTally[];
+  /** BE-9 / §2.5 — overall quorum status for the policy. */
+  quorumStatus?: QuorumStatus;
 }
 
 export interface PolicyDefinition {
@@ -274,6 +299,27 @@ export interface CanonicalEvent {
   data: Record<string, unknown>;
 }
 
+/**
+ * BE §3.3 (re-scoped) — `llm.call.completed` event payload.
+ *
+ * Synthesized by the Control Plane from message metadata (`llmCall` or
+ * `tokenUsage`). Content is inline (subject to `RedactionService`
+ * applied in the normalizer); `artifactId` is present when an agent
+ * pre-pinned a context artifact.
+ */
+export interface LlmCallCompletedData {
+  participantId: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  latencyMs: number;
+  prompt?: string;
+  redactedPrompt?: string;
+  response?: string;
+  contextRef?: { artifactId?: string; uri?: string };
+  resultingEventIds?: string[];
+}
+
 export interface Artifact {
   id: string;
   runId: string;
@@ -337,8 +383,30 @@ export interface RunStateProjection {
       confidence?: number;
       reasons?: string[];
       finalized: boolean;
-      outcomePositive?: boolean;
+      /**
+       * BE-3 / §1.3 — explicit `boolean | null` on resolved runs.
+       *  - `true`  → positive outcome
+       *  - `false` → negative outcome
+       *  - `null`  → decision finalized but no outcome semantics declared
+       *  - `undefined` → decision not yet resolved
+       */
+      outcomePositive?: boolean | null;
       proposalId?: string;
+      /** BE-5 / §2.1 — per-contributor breakdown. */
+      proposals?: Array<{
+        participantId: string;
+        action: string;
+        confidence?: number;
+        reasons: string[];
+        ts: string;
+        vote?: 'allow' | 'deny';
+      }>;
+      /** BE-6 / §2.2 — when the decision resolved. */
+      resolvedAt?: string;
+      /** BE-6 / §2.2 — aggregator participant id that resolved the decision. */
+      resolvedBy?: string;
+      /** BE-7 / §2.3 — scenario-provided decision prompt (not a reason). */
+      prompt?: string;
     };
   };
   signals: {
@@ -517,23 +585,6 @@ export interface AgentProfile {
   };
 }
 
-export interface SendRunMessageRequest {
-  from: string;
-  to?: string[];
-  messageType: string;
-  payload?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-}
-
-export interface SendSignalRequest {
-  from: string;
-  to: string[];
-  messageType: string;
-  payload?: Record<string, unknown>;
-  signalType?: string;
-  severity?: string;
-}
-
 export interface RunExportBundle {
   run: RunRecord;
   session: Record<string, unknown> | null;
@@ -608,6 +659,18 @@ export interface AppPreferences {
   showParallelBranches: boolean;
   replaySpeed: number;
   logsDensity: 'compact' | 'comfortable';
+  /**
+   * R3.3 — design-system version switch.
+   *  - 'v1' (default): current production UI.
+   *  - 'v2': the redesign from plans/ui-improvement-plan.md finding #14,
+   *    scoped under `:root[data-design='v2']` CSS tokens.
+   *
+   * Override at runtime via `?design=v2` query param (ProvidersInner
+   * applies it on mount). The override persists into this store so
+   * subsequent navigations keep v2 on. Reset to v1 by visiting
+   * `?design=v1` or clearing the stored preferences.
+   */
+  designVersion: 'v1' | 'v2';
 }
 
 /* ─── Query parameter types ─── */

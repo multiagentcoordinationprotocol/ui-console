@@ -155,11 +155,23 @@ function NewRunPageContent() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const compiled = compileResult ?? (await compileMutation.mutateAsync());
-      return createRun(compiled.executionRequest as unknown as Record<string, unknown>, demoMode);
+      const result = await runExample(
+        {
+          scenarioRef: `${packSlug}/${selectedScenario?.scenario}@${version}`,
+          templateId,
+          mode,
+          inputs: effectiveInputs.value ?? {},
+          bootstrapAgents: true,
+          submitToControlPlane: true
+        },
+        demoMode
+      );
+      setBootstrapResult(result as unknown as Record<string, unknown>);
+      return result;
     },
-    onSuccess: (data) => {
-      router.push(`/runs/live/${data.runId}`);
+    onSuccess: (result) => {
+      const runId = result.controlPlane?.runId ?? '';
+      if (runId) router.push(`/runs/live/${runId}`);
     }
   });
 

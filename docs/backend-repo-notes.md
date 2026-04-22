@@ -50,8 +50,8 @@ These notes summarize the uploaded repositories that this UI was aligned against
 - `/runs/:id/metrics`
 - `/runs/:id/traces`
 - `/runs/:id/artifacts`
-- `/runs/:id/messages`
-- `/runs/:id/cancel` — returns full run record
+- `/runs/:id/messages` — **GET only**; `POST` removed (direct-agent-auth — agents emit via SDK)
+- `/runs/:id/cancel` — returns full run record (proxies to initiator's cancel callback, or calls `CancelSession` when policy-delegated)
 - `/runs/:id/clone` — returns `{ runId, status, traceId }`
 - `/runs/:id/archive` — returns full run record, archives via tag
 - `/runs/:id/replay` — returns replay descriptor

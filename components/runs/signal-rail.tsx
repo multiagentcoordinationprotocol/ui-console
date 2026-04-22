@@ -1,18 +1,37 @@
 'use client';
 
+import Link from 'next/link';
+import { ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { RunStateProjection } from '@/lib/types';
 import { formatDateTime, formatPercent } from '@/lib/utils/format';
 
-export function SignalRail({ state }: { state: RunStateProjection }) {
+export function SignalRail({
+  state,
+  runId
+}: {
+  state: RunStateProjection;
+  /** When provided, the "Open in full view" link targets the signal-filtered /logs view. */
+  runId?: string;
+}) {
+  const fullViewHref = runId ? `/logs?runId=${runId}&type=signal.emitted` : '/logs?type=signal.emitted';
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Signal rail</CardTitle>
-        <CardDescription>
-          Side-channel updates, confidence spikes, and anomaly indicators emitted during the run.
-        </CardDescription>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+          <div>
+            <CardTitle>Signal rail</CardTitle>
+            <CardDescription>
+              Side-channel updates, confidence spikes, and anomaly indicators emitted during the run.
+            </CardDescription>
+          </div>
+          <Link href={fullViewHref} className="panel-action" aria-label="Open signals in full view">
+            <ExternalLink size={12} style={{ verticalAlign: '-1px', marginRight: 4 }} />
+            Open in full view
+          </Link>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="signal-list">

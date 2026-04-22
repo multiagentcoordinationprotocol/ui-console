@@ -14,7 +14,6 @@ import { NodeInspector } from '@/components/runs/node-inspector';
 import { DecisionPanel } from '@/components/runs/decision-panel';
 import { PolicyPanel } from '@/components/runs/policy-panel';
 import { RunOverviewCard } from '@/components/runs/run-overview-card';
-import { SessionInteractionPanel } from '@/components/runs/session-interaction-panel';
 import { SignalRail } from '@/components/runs/signal-rail';
 import { TimelineScrubber } from '@/components/runs/timeline-scrubber';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +39,9 @@ import {
   getRunMetrics,
   getRunState,
   getRunTraces,
+  getJaegerTrace,
+  getJaegerUiUrl,
+  listRuns,
   rebuildProjection
 } from '@/lib/api/client';
 import { useLiveRun } from '@/lib/hooks/use-live-run';
@@ -95,6 +97,13 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
   const messagesQuery = useQuery({
     queryKey: ['run-messages', runId, demoMode],
     queryFn: () => getRunMessages(runId, demoMode)
+  });
+
+  const traceId = tracesQuery.data?.traceId ?? '';
+  const jaegerQuery = useQuery({
+    queryKey: ['jaeger-trace', traceId],
+    queryFn: () => getJaegerTrace(traceId),
+    enabled: Boolean(traceId) && !demoMode && traceId !== '00000000000000000000000000000000'
   });
 
   const live = useLiveRun({
@@ -231,13 +240,17 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
   const isLoading = runQuery.isLoading || stateQuery.isLoading;
   const isError = runQuery.error || stateQuery.error;
 
+  const jaegerSpanCount = jaegerQuery.data
+    ? jaegerQuery.data.spans.filter((s) => !s.operationName.startsWith('middleware')).length
+    : 0;
+
   const observabilitySummary = useMemo(() => {
     if (!metricsQuery.data || !tracesQuery.data) return [];
     const items = [
       { label: 'Event count', value: String(metricsQuery.data.eventCount) },
       { label: 'Tool calls', value: String(metricsQuery.data.toolCallCount) },
       { label: 'Signals', value: String(metricsQuery.data.signalCount) },
-      { label: 'Trace spans', value: String(tracesQuery.data.spanCount) }
+      { label: 'Trace spans', value: String(jaegerSpanCount || tracesQuery.data.spanCount) }
     ];
     if (metricsQuery.data.totalTokens) {
       items.push({ label: 'Tokens', value: String(metricsQuery.data.totalTokens) });
@@ -246,7 +259,7 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
       items.push({ label: 'Est. cost', value: `$${metricsQuery.data.estimatedCostUsd.toFixed(4)}` });
     }
     return items;
-  }, [metricsQuery.data, tracesQuery.data]);
+  }, [metricsQuery.data, tracesQuery.data, jaegerSpanCount]);
 
   const replayFrames = useMemo(() => (liveMode ? [] : getMockFrames(runId)), [liveMode, runId]);
   const replayFrameQuery = useQuery({
@@ -255,7 +268,18 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
     enabled: replaySeq !== undefined
   });
 
-  const compareHref = `/runs/${runId}/compare/${getQuickCompareTarget(runId)}`;
+  // In real mode, find the previous run of the same scenario for comparison
+  const scenarioRef = runQuery.data?.source?.ref;
+  const previousRunQuery = useQuery({
+    queryKey: ['previous-run', runId, scenarioRef, demoMode],
+    queryFn: async () => {
+      const runs = await listRuns(demoMode, { search: scenarioRef });
+      return runs.find((r) => r.id !== runId && r.status === 'completed') ?? null;
+    },
+    enabled: !demoMode && Boolean(scenarioRef)
+  });
+  const compareTarget = demoMode ? getQuickCompareTarget(runId) : previousRunQuery.data?.id;
+  const compareHref = compareTarget ? `/runs/${runId}/compare/${compareTarget}` : undefined;
 
   if (isLoading)
     return (
@@ -286,11 +310,15 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
     <div className="stack">
       <RunOverviewCard
         run={run}
+        state={projectedState}
         connectionStatus={connectionStatus}
         reconnectAttempt={liveMode ? live.reconnectAttempt : undefined}
         onCancel={run.status === 'running' ? () => cancelMutation.mutate() : undefined}
         onReplay={() => replayMutation.mutate()}
+        metrics={metricsQuery.data}
         compareHref={compareHref}
+        traceId={traceId}
+        jaegerUiUrl={traceId && traceId !== '00000000000000000000000000000000' ? getJaegerUiUrl(traceId) : undefined}
       />
 
       <Card>
@@ -355,18 +383,18 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
           />
         </ErrorBoundary>
         <ErrorBoundary>
-          <LiveEventFeed events={projectedEvents} title={liveMode ? 'Live event rail' : 'Canonical event history'} />
+          <LiveEventFeed
+            events={projectedEvents}
+            runId={runId}
+            title={liveMode ? 'Live event rail' : 'Canonical event history'}
+          />
         </ErrorBoundary>
-        <SignalRail state={projectedState} />
+        <SignalRail state={projectedState} runId={runId} />
       </div>
-
-      {liveMode && run.status === 'running' && (
-        <SessionInteractionPanel runId={runId} demoMode={demoMode} state={projectedState} />
-      )}
 
       <div className="split-layout">
         <div className="panel-stack">
-          <DecisionPanel run={run} state={projectedState} />
+          <DecisionPanel run={run} state={projectedState} events={projectedEvents} runId={runId} />
           {projectedState.policy && (
             <PolicyPanel
               policy={projectedState.policy}

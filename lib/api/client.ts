@@ -64,8 +64,6 @@ import type {
   RuntimePolicyDescriptor,
   RuntimeRootDescriptor,
   ScenarioSummary,
-  SendRunMessageRequest,
-  SendSignalRequest,
   TraceSummary,
   ValidateRunResponse,
   WebhookSubscription
@@ -86,6 +84,28 @@ function listAllScenarios(): ScenarioSummary[] {
 
 function listAllEvents(): CanonicalEvent[] {
   return Object.values(MOCK_RUN_EVENTS).flatMap((items) => items);
+}
+
+/** Normalize flat CP event response to the nested CanonicalEvent shape the UI expects. */
+function normalizeEvent(raw: Record<string, unknown>): CanonicalEvent {
+  const event = raw as unknown as CanonicalEvent & {
+    sourceKind?: string;
+    sourceName?: string;
+    subjectKind?: string;
+    subjectId?: string;
+    rawType?: string;
+  };
+  if (!event.source && (event.sourceKind || event.sourceName)) {
+    event.source = {
+      kind: (event.sourceKind ?? 'control-plane') as CanonicalEvent['source']['kind'],
+      name: event.sourceName ?? '',
+      rawType: event.rawType
+    };
+  }
+  if (!event.subject && event.subjectKind) {
+    event.subject = { kind: event.subjectKind, id: event.subjectId ?? '' };
+  }
+  return event as CanonicalEvent;
 }
 
 /** Map flat CP run response to the RunRecord shape the UI expects. */
@@ -302,9 +322,210 @@ export async function getRunState(runId: string, demoMode: boolean): Promise<Run
   return fetchJson<RunStateProjection>('control-plane', `/runs/${runId}/state`);
 }
 
-export async function getRunEvents(runId: string, demoMode: boolean, limit = 500): Promise<CanonicalEvent[]> {
-  if (demoMode) return maybeDelay(MOCK_RUN_EVENTS[runId] ?? []);
-  return fetchJson<CanonicalEvent[]>('control-plane', `/runs/${runId}/events?limit=${limit}`);
+/**
+ * Query options for per-run event listing. Backend §4.2 added
+ * `afterTs`/`beforeTs` (ISO-8601 UTC) and a CSV `type` filter.
+ */
+export interface RunEventsQuery {
+  limit?: number;
+  afterSeq?: number;
+  /** ISO-8601 UTC lower bound (exclusive), e.g. `2026-04-14T00:00:00Z`. */
+  afterTs?: string;
+  /** ISO-8601 UTC upper bound (inclusive). */
+  beforeTs?: string;
+  /** Comma-separated event types, e.g. `signal.emitted,signal.acknowledged`. */
+  type?: string;
+}
+
+export async function getRunEvents(
+  runId: string,
+  demoMode: boolean,
+  queryOrLimit: RunEventsQuery | number = {},
+  afterSeqArg = 0
+): Promise<CanonicalEvent[]> {
+  // Back-compat: callers that pass `(runId, demoMode, limit, afterSeq)` still work.
+  const query: RunEventsQuery =
+    typeof queryOrLimit === 'number' ? { limit: queryOrLimit, afterSeq: afterSeqArg } : queryOrLimit;
+  const { limit = 500, afterSeq = 0, afterTs, beforeTs, type } = query;
+
+  if (demoMode) {
+    let items = MOCK_RUN_EVENTS[runId] ?? [];
+    if (afterSeq) items = items.filter((event) => event.seq > afterSeq);
+    if (afterTs) items = items.filter((event) => event.ts > afterTs);
+    if (beforeTs) items = items.filter((event) => event.ts <= beforeTs);
+    if (type) {
+      const types = new Set(type.split(',').map((s) => s.trim()));
+      items = items.filter((event) => types.has(event.type));
+    }
+    return maybeDelay(items.slice(0, limit));
+  }
+
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.set('afterSeq', String(afterSeq));
+  if (afterTs) params.set('afterTs', afterTs);
+  if (beforeTs) params.set('beforeTs', beforeTs);
+  if (type) params.set('type', type);
+
+  const raw = await fetchJson<Record<string, unknown>[] | { data: Record<string, unknown>[] }>(
+    'control-plane',
+    `/runs/${runId}/events?${params.toString()}`
+  );
+  // Backend §4.2 returns `{data,total,limit,nextCursor}` when any of the new
+  // filters is set; plain array for the fast path.
+  const array = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  return array.map(normalizeEvent);
+}
+
+/**
+ * Backend §4.1 — cross-run `/events` endpoint. Enables scenario-wide
+ * and type-wide queries across runs without per-run fan-out.
+ */
+export interface EventsQuery extends RunEventsQuery {
+  runId?: string;
+  scenarioRef?: string;
+}
+
+export async function listEvents(
+  demoMode: boolean,
+  query: EventsQuery = {}
+): Promise<{ data: CanonicalEvent[]; total: number; nextCursor?: number }> {
+  if (demoMode) {
+    // Fan out across mock runs when no specific runId is pinned.
+    let items: CanonicalEvent[] = query.runId
+      ? (MOCK_RUN_EVENTS[query.runId] ?? [])
+      : Object.values(MOCK_RUN_EVENTS).flat();
+    if (query.scenarioRef) {
+      const runIds = new Set(
+        MOCK_RUNS.filter(
+          (run) => run.source?.ref === query.scenarioRef || run.metadata?.scenarioRef === query.scenarioRef
+        ).map((r) => r.id)
+      );
+      items = items.filter((event) => runIds.has(event.runId));
+    }
+    if (query.afterSeq) items = items.filter((event) => event.seq > (query.afterSeq ?? 0));
+    if (query.afterTs) items = items.filter((event) => event.ts > query.afterTs!);
+    if (query.beforeTs) items = items.filter((event) => event.ts <= query.beforeTs!);
+    if (query.type) {
+      const types = new Set(query.type.split(',').map((s) => s.trim()));
+      items = items.filter((event) => types.has(event.type));
+    }
+    const limit = query.limit ?? 500;
+    const total = items.length;
+    const data = items.slice(0, limit);
+    return maybeDelay({
+      data,
+      total,
+      nextCursor: data.length < items.length ? data[data.length - 1]?.seq : undefined
+    });
+  }
+
+  const params = new URLSearchParams();
+  if (query.runId) params.set('runId', query.runId);
+  if (query.scenarioRef) params.set('scenarioRef', query.scenarioRef);
+  if (query.type) params.set('type', query.type);
+  if (query.afterSeq !== undefined) params.set('afterSeq', String(query.afterSeq));
+  if (query.afterTs) params.set('afterTs', query.afterTs);
+  if (query.beforeTs) params.set('beforeTs', query.beforeTs);
+  params.set('limit', String(query.limit ?? 500));
+
+  // Happy path: cross-run /events endpoint (BE §4.1).
+  if (!eventsEndpointMissing) {
+    try {
+      const response = await fetchJson<{
+        data: Record<string, unknown>[];
+        total: number;
+        nextCursor?: number;
+      }>('control-plane', `/events?${params.toString()}`);
+      return {
+        data: response.data.map(normalizeEvent),
+        total: response.total,
+        nextCursor: response.nextCursor
+      };
+    } catch (error) {
+      // Cache the 404 for the rest of this session so we stop probing it
+      // on every page load. Non-404 errors propagate normally.
+      if (error instanceof ApiError && error.isNotFound) {
+        eventsEndpointMissing = true;
+        console.warn(
+          '[MACP UI] Control-plane is missing GET /events (BE §4.1). ' +
+            'Falling back to per-run /runs/:id/events fan-out for the rest of this session.'
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  // Fallback path: fan out across per-run /runs/:id/events (which the
+  // older control-plane builds DO have). Limits the blast radius by
+  // capping the number of runs we fetch.
+  return await listEventsFallback(query);
+}
+
+/**
+ * Session-cached flag — once we've confirmed `/events` is missing,
+ * skip probing it again. Reset on full page reload.
+ */
+let eventsEndpointMissing = false;
+
+async function listEventsFallback(
+  query: EventsQuery
+): Promise<{ data: CanonicalEvent[]; total: number; nextCursor?: number }> {
+  const limit = query.limit ?? 500;
+
+  // Determine which runs to fan out across.
+  let runIds: string[];
+  if (query.runId) {
+    runIds = [query.runId];
+  } else {
+    const runs = await listRuns(false, {
+      ...(query.scenarioRef ? { scenarioRef: query.scenarioRef } : {}),
+      limit: 10 // cap fan-out to keep the page snappy
+    });
+    runIds = runs.map((run) => run.id);
+  }
+
+  if (runIds.length === 0) {
+    return { data: [], total: 0 };
+  }
+
+  // Per-run events fetch — uses the older endpoint that does exist.
+  const allEvents: CanonicalEvent[] = [];
+  for (const runId of runIds) {
+    try {
+      const events = await getRunEvents(runId, false, {
+        limit,
+        afterSeq: query.afterSeq ?? 0,
+        afterTs: query.afterTs,
+        beforeTs: query.beforeTs,
+        type: query.type
+      });
+      for (const event of events) allEvents.push(event);
+    } catch (error) {
+      console.warn(
+        `[MACP UI] Failed to fetch events for run ${runId.slice(0, 8)}…: `,
+        error instanceof Error ? error.message : error
+      );
+      // Continue — partial results are better than none.
+    }
+  }
+
+  // Sort newest-first by seq within run, then cap to the requested limit.
+  allEvents.sort((a, b) => {
+    if (a.runId !== b.runId) return a.runId.localeCompare(b.runId);
+    return b.seq - a.seq;
+  });
+
+  const total = allEvents.length;
+  const data = allEvents.slice(0, limit);
+  return {
+    data,
+    total,
+    // Cursor pagination doesn't compose cleanly across multiple runs;
+    // the caller's "Load more" button hides when nextCursor is undefined.
+    nextCursor: undefined
+  };
 }
 
 export async function getRunMetrics(runId: string, demoMode: boolean): Promise<MetricsSummary> {
@@ -315,6 +536,42 @@ export async function getRunMetrics(runId: string, demoMode: boolean): Promise<M
 export async function getRunTraces(runId: string, demoMode: boolean): Promise<TraceSummary> {
   if (demoMode) return maybeDelay(MOCK_RUN_TRACES[runId]);
   return fetchJson<TraceSummary>('control-plane', `/runs/${runId}/traces`);
+}
+
+export interface JaegerSpan {
+  traceID: string;
+  spanID: string;
+  operationName: string;
+  references: Array<{ refType: string; traceID: string; spanID: string }>;
+  startTime: number; // microseconds
+  duration: number; // microseconds
+  tags: Array<{ key: string; type: string; value: unknown }>;
+  logs: Array<{ timestamp: number; fields: Array<{ key: string; value: unknown }> }>;
+  processID: string;
+}
+
+export interface JaegerTrace {
+  traceID: string;
+  spans: JaegerSpan[];
+  processes: Record<string, { serviceName: string; tags: Array<{ key: string; value: unknown }> }>;
+}
+
+export async function getJaegerTrace(traceId: string): Promise<JaegerTrace | null> {
+  if (!traceId || traceId === '00000000000000000000000000000000') return null;
+  try {
+    const response = await fetch(`/api/jaeger/traces/${traceId}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.data?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function getJaegerUiUrl(traceId: string): string {
+  const base =
+    typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':16686') : 'http://localhost:16686';
+  return `${base}/trace/${traceId}`;
 }
 
 export async function getRunArtifacts(runId: string, demoMode: boolean): Promise<Artifact[]> {
@@ -477,7 +734,21 @@ export async function resetCircuitBreaker(demoMode: boolean): Promise<CircuitBre
   return fetchJson<CircuitBreakerResult>('control-plane', '/admin/circuit-breaker/reset', { method: 'POST' });
 }
 
-export async function getDashboardOverview(demoMode: boolean): Promise<{
+/** Backend §5.1 — query filters on `/dashboard/overview`. */
+export interface DashboardOverviewQuery {
+  /** Window alias. Backend accepts `15m / 1h / 6h / 24h / 7d / 30d`. */
+  window?: '15m' | '1h' | '6h' | '24h' | '7d' | '30d';
+  scenarioRef?: string;
+  environment?: string;
+  /** Explicit range (mutually exclusive with `window`). ISO-8601 UTC. */
+  from?: string;
+  to?: string;
+}
+
+export async function getDashboardOverview(
+  demoMode: boolean,
+  query: DashboardOverviewQuery = {}
+): Promise<{
   kpis: DashboardKpis;
   runs: RunRecord[];
   packs: PackSummary[];
@@ -486,9 +757,20 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
   degraded?: boolean;
 }> {
   if (demoMode) {
+    // Demo mode — filter the cached runs client-side so the KPI strip
+    // responds to scenario/environment pickers even without backend support.
+    let filteredRuns = MOCK_RUNS;
+    if (query.scenarioRef) {
+      filteredRuns = filteredRuns.filter(
+        (run) => run.source?.ref === query.scenarioRef || run.metadata?.scenarioRef === query.scenarioRef
+      );
+    }
+    if (query.environment) {
+      filteredRuns = filteredRuns.filter((run) => run.metadata?.environment === query.environment);
+    }
     return maybeDelay({
-      kpis: computeDashboardKpis(),
-      runs: MOCK_RUNS,
+      kpis: computeDashboardKpis(filteredRuns),
+      runs: filteredRuns,
       packs: MOCK_PACKS,
       runtimeHealth: MOCK_RUNTIME_HEALTH,
       charts: MOCK_CHARTS
@@ -501,9 +783,17 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
     recentRuns?: Record<string, unknown>[];
     runtimeHealth?: { ok: boolean; runtimeKind: string; detail?: string };
   };
+  const params = new URLSearchParams();
+  if (query.window) params.set('window', query.window);
+  if (query.scenarioRef) params.set('scenarioRef', query.scenarioRef);
+  if (query.environment) params.set('environment', query.environment);
+  if (query.from) params.set('from', query.from);
+  if (query.to) params.set('to', query.to);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+
   let overviewDegraded = false;
   const [cpOverview, runs, packs, runtimeHealth] = await Promise.all([
-    fetchJson<CpOverview>('control-plane', '/dashboard/overview').catch((error): CpOverview => {
+    fetchJson<CpOverview>('control-plane', `/dashboard/overview${suffix}`).catch((error): CpOverview => {
       console.warn(
         '[MACP UI] Dashboard overview endpoint unavailable:',
         error instanceof Error ? error.message : error
@@ -511,7 +801,11 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
       overviewDegraded = true;
       return {};
     }),
-    listRuns(false, { limit: 20 }),
+    listRuns(false, {
+      limit: 20,
+      ...(query.scenarioRef ? { scenarioRef: query.scenarioRef } : {}),
+      ...(query.environment ? { environment: query.environment } : {})
+    }),
     listPacks(false),
     getRuntimeHealth(false)
   ]);
@@ -555,10 +849,49 @@ export async function getDashboardOverview(demoMode: boolean): Promise<{
       runVolume: toChartPoints(cpCharts.runVolume),
       latency: toChartPoints(cpCharts.latency),
       errors: toChartPoints(cpCharts.errorClasses),
-      signals: toChartPoints(cpCharts.signalVolume)
+      signals: toChartPoints(cpCharts.signalVolume),
+      // Backend §5.2 — richer chart series. Each is optional; the UI
+      // only renders when the series is non-empty.
+      throughput: toChartPoints(cpCharts.throughput),
+      queueDepth: toChartPoints(cpCharts.queueDepth),
+      latencyP50: toChartPoints(cpCharts.latencyP50),
+      latencyP95: toChartPoints(cpCharts.latencyP95),
+      latencyP99: toChartPoints(cpCharts.latencyP99),
+      cost: toChartPoints(cpCharts.cost),
+      successRate: toChartPoints(cpCharts.successRate),
+      decisionOutcomePositive: toChartPoints(cpCharts.decisionOutcomePositive),
+      decisionOutcomeNegative: toChartPoints(cpCharts.decisionOutcomeNegative),
+      perScenario: toChartPoints(cpCharts.perScenario)
     },
     degraded: overviewDegraded || undefined
   };
+}
+
+/** Backend §5.3 — circuit breaker state history. */
+export interface CircuitBreakerHistoryEntry {
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  enteredAt: string;
+  reason?: string;
+}
+
+export async function getCircuitBreakerHistory(
+  demoMode: boolean,
+  window?: DashboardOverviewQuery['window']
+): Promise<CircuitBreakerHistoryEntry[]> {
+  if (demoMode) {
+    const now = Date.now();
+    return maybeDelay([
+      { state: 'CLOSED', enteredAt: new Date(now - 1000 * 60 * 60 * 23).toISOString() },
+      {
+        state: 'HALF_OPEN',
+        enteredAt: new Date(now - 1000 * 60 * 25).toISOString(),
+        reason: 'Runtime heartbeat timeout'
+      },
+      { state: 'CLOSED', enteredAt: new Date(now - 1000 * 60 * 22).toISOString() }
+    ]);
+  }
+  const suffix = window ? `?window=${window}` : '';
+  return fetchJson<CircuitBreakerHistoryEntry[]>('control-plane', `/admin/circuit-breaker/history${suffix}`);
 }
 
 export async function getLogsData(demoMode: boolean, runId?: string) {
@@ -608,28 +941,6 @@ export function getQuickCompareTarget(runId: string): string {
 
 export function listScenarioRefs(): string[] {
   return listAllScenarios().map((scenario) => `${scenario.scenario}@${scenario.versions[0]}`);
-}
-
-/* ─── Send Message / Signal into live sessions ─── */
-
-export async function sendRunMessage(
-  runId: string,
-  body: SendRunMessageRequest,
-  demoMode: boolean
-): Promise<MutationAck> {
-  if (demoMode) return maybeDelay({ ok: true, runId });
-  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/messages`, {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
-}
-
-export async function sendRunSignal(runId: string, body: SendSignalRequest, demoMode: boolean): Promise<MutationAck> {
-  if (demoMode) return maybeDelay({ ok: true, runId });
-  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/signal`, {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
 }
 
 /* ─── Batch operations ─── */

@@ -11,6 +11,8 @@
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+/test/e2e/test-results/
+/test/e2e/visual/test-results/
 
 # next.js
 /.next/
@@ -40,6 +42,7 @@ yarn-error.log*
 next-env.d.ts
 
 #claude
+/.claude*
 CLAUDE.md
 plans/
 

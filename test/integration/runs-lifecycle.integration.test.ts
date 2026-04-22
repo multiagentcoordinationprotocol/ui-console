@@ -382,71 +382,6 @@ describe('Runs Lifecycle (integration)', () => {
     });
   });
 
-  describe('Run messages and signals', () => {
-    it('sendRunMessage sends POST with from/to/messageType', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/messages`, () => ({
-        status: 200,
-        body: { ok: true }
-      }));
-
-      const { sendRunMessage } = await import('@/lib/api/client');
-      await sendRunMessage(
-        RUN_ID_1,
-        { from: 'agent-a', to: ['agent-b'], messageType: 'Proposal', payload: { value: 42 } },
-        false
-      );
-
-      const postBody = mocker.requests.at(-1)!.body as Record<string, unknown>;
-      expect(postBody.from).toBe('agent-a');
-      expect(postBody.messageType).toBe('Proposal');
-    });
-
-    it('sendRunMessage propagates error on 500', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/messages`, () => ({
-        status: 500,
-        body: { error: 'internal server error' }
-      }));
-
-      const { sendRunMessage } = await import('@/lib/api/client');
-      await expect(
-        sendRunMessage(
-          RUN_ID_1,
-          { from: 'agent-a', to: ['agent-b'], messageType: 'Proposal', payload: { value: 42 } },
-          false
-        )
-      ).rejects.toThrow(ApiError);
-
-      try {
-        await sendRunMessage(
-          RUN_ID_1,
-          { from: 'agent-a', to: ['agent-b'], messageType: 'Proposal', payload: { value: 42 } },
-          false
-        );
-      } catch (err) {
-        expect(err).toBeInstanceOf(ApiError);
-        expect((err as ApiError).status).toBe(500);
-      }
-    });
-
-    it('sendRunSignal sends POST with signal data', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/signal`, () => ({
-        status: 200,
-        body: { ok: true }
-      }));
-
-      const { sendRunSignal } = await import('@/lib/api/client');
-      await sendRunSignal(
-        RUN_ID_1,
-        { from: 'agent-a', to: ['agent-b'], messageType: 'FraudAlert', signalType: 'alert', severity: 'high' },
-        false
-      );
-
-      const postBody = mocker.requests.at(-1)!.body as Record<string, unknown>;
-      expect(postBody.signalType).toBe('alert');
-      expect(postBody.severity).toBe('high');
-    });
-  });
-
   describe('Run export', () => {
     it('exportRunBundle returns full bundle', async () => {
       mocker.on('GET', `/api/proxy/control-plane/runs/${RUN_ID_1}/export`, () => ({
@@ -594,7 +529,8 @@ describe('Runs Lifecycle (integration)', () => {
       await getRunEvents(RUN_ID_1, false, 100);
 
       const lastReq = mocker.requests.at(-1)!;
-      expect(lastReq.url).toContain('?limit=100');
+      expect(lastReq.url).toContain('afterSeq=0');
+      expect(lastReq.url).toContain('limit=100');
     });
   });
 

@@ -121,7 +121,7 @@ describe('real mode API client', () => {
   /* ─── getRunEvents ─── */
 
   describe('getRunEvents', () => {
-    it('calls GET /api/proxy/control-plane/runs/:id/events?limit=500 by default', async () => {
+    it('calls GET /api/proxy/control-plane/runs/:id/events?afterSeq=0&limit=500 by default', async () => {
       const events = canonicalEvents(RUN_ID_1, 3);
       mocker.on('GET', `/api/proxy/control-plane/runs/${RUN_ID_1}/events`, () => ({
         status: 200,
@@ -133,6 +133,7 @@ describe('real mode API client', () => {
 
       expect(result).toHaveLength(3);
       const req = mocker.requests.find((r) => r.url.includes('/events'));
+      expect(req!.url).toContain('afterSeq=0');
       expect(req!.url).toContain('limit=500');
     });
 
@@ -284,48 +285,6 @@ describe('real mode API client', () => {
 
       const req = mocker.requests.find((r) => r.method === 'DELETE');
       expect(req!.url).toContain('/webhooks/wh-001');
-    });
-  });
-
-  /* ─── sendRunMessage ─── */
-
-  describe('sendRunMessage', () => {
-    it('calls POST with typed body', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/messages`, () => ({
-        status: 200,
-        body: { ok: true, runId: RUN_ID_1 }
-      }));
-
-      const { sendRunMessage } = await import('@/lib/api/client');
-      const body = { from: 'agent-a', to: ['agent-b'], messageType: 'Proposal', payload: { value: 42 } };
-      const result = await sendRunMessage(RUN_ID_1, body, REAL);
-
-      expect(result).toEqual({ ok: true, runId: RUN_ID_1 });
-
-      const req = mocker.requests.find((r) => r.url.includes('/messages'));
-      expect(req!.method).toBe('POST');
-      expect(req!.body).toEqual(body);
-    });
-  });
-
-  /* ─── sendRunSignal ─── */
-
-  describe('sendRunSignal', () => {
-    it('calls POST with typed body', async () => {
-      mocker.on('POST', `/api/proxy/control-plane/runs/${RUN_ID_1}/signal`, () => ({
-        status: 200,
-        body: { ok: true, runId: RUN_ID_1 }
-      }));
-
-      const { sendRunSignal } = await import('@/lib/api/client');
-      const body = { from: 'agent-a', to: ['agent-b'], messageType: 'Signal', signalType: 'interrupt' };
-      const result = await sendRunSignal(RUN_ID_1, body, REAL);
-
-      expect(result).toEqual({ ok: true, runId: RUN_ID_1 });
-
-      const req = mocker.requests.find((r) => r.url.includes('/signal'));
-      expect(req!.method).toBe('POST');
-      expect(req!.body).toEqual(body);
     });
   });
 

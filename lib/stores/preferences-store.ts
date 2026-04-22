@@ -13,6 +13,7 @@ interface PreferencesState extends AppPreferences {
   setShowParallelBranches(value: boolean): void;
   setReplaySpeed(value: number): void;
   setLogsDensity(value: AppPreferences['logsDensity']): void;
+  setDesignVersion(value: AppPreferences['designVersion']): void;
 }
 
 const defaultPreferences: AppPreferences = {
@@ -22,7 +23,12 @@ const defaultPreferences: AppPreferences = {
   showCriticalPath: true,
   showParallelBranches: true,
   replaySpeed: 1,
-  logsDensity: 'comfortable'
+  logsDensity: 'comfortable',
+  // R7.3 — v2 is now the default. Users can opt out via `?design=v1` (URL
+  // override writes back to this store) for emergency rollback. The flag
+  // and the `data-design` attribute stay in place; remove them in a
+  // follow-up once v2 is stable in production (plan R7.3 final step).
+  designVersion: 'v2'
 };
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -36,7 +42,8 @@ export const usePreferencesStore = create<PreferencesState>()(
       setShowCriticalPath: (showCriticalPath) => set({ showCriticalPath }),
       setShowParallelBranches: (showParallelBranches) => set({ showParallelBranches }),
       setReplaySpeed: (replaySpeed) => set({ replaySpeed }),
-      setLogsDensity: (logsDensity) => set({ logsDensity })
+      setLogsDensity: (logsDensity) => set({ logsDensity }),
+      setDesignVersion: (designVersion) => set({ designVersion })
     }),
     {
       name: 'macp-ui-preferences',

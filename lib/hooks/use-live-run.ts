@@ -8,6 +8,28 @@ const MAX_RECONNECT_ATTEMPTS = 8;
 const MAX_EVENT_BUFFER = 500;
 const HEARTBEAT_TIMEOUT_MS = 45_000;
 
+/** Normalize flat CP event fields to the nested shape the UI expects. */
+function normalizeEvent(raw: Record<string, unknown>): CanonicalEvent {
+  const event = raw as unknown as CanonicalEvent & {
+    sourceKind?: string;
+    sourceName?: string;
+    subjectKind?: string;
+    subjectId?: string;
+    rawType?: string;
+  };
+  if (!event.source && (event.sourceKind || event.sourceName)) {
+    event.source = {
+      kind: (event.sourceKind ?? 'control-plane') as CanonicalEvent['source']['kind'],
+      name: event.sourceName ?? '',
+      rawType: event.rawType
+    };
+  }
+  if (!event.subject && event.subjectKind) {
+    event.subject = { kind: event.subjectKind, id: event.subjectId ?? '' };
+  }
+  return event as CanonicalEvent;
+}
+
 interface UseLiveRunOptions {
   runId: string;
   demoMode: boolean;
@@ -100,7 +122,7 @@ export function useLiveRun({ runId, demoMode, initialState, initialEvents, autoS
     });
 
     source.addEventListener('canonical_event', (event) => {
-      const payload = JSON.parse((event as MessageEvent).data) as CanonicalEvent;
+      const payload = normalizeEvent(JSON.parse((event as MessageEvent).data) as Record<string, unknown>);
       appendEvent(payload);
       setLastSeq(payload.seq);
       resetHeartbeatTimer();

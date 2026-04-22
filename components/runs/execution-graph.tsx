@@ -14,6 +14,7 @@ import {
   type Node,
   type NodeProps
 } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { Bot, CheckCircle2, CircleDashed, Database, Flag, Workflow } from 'lucide-react';
 import type { RunStateProjection } from '@/lib/types';
 import { getStatusTone, titleCase } from '@/lib/utils/format';
@@ -137,12 +138,7 @@ export function ExecutionGraph({
     const positions = buildNodePositions(state);
     return state.graph.nodes.map((node, index) => {
       const participant = state.participants.find((item) => item.participantId === node.id);
-      const latestProgress = [...state.progress.entries]
-        .reverse()
-        .find(
-          (entry) =>
-            entry.participantId === node.id || (node.id === 'risk-agent' && entry.participantId === 'risk-agent')
-        );
+      const latestProgress = [...state.progress.entries].reverse().find((entry) => entry.participantId === node.id);
       const signalCount = state.signals.signals.filter((signal) => signal.sourceParticipantId === node.id).length;
 
       return {
@@ -163,7 +159,14 @@ export function ExecutionGraph({
             latestProgress?.percentage !== undefined ? `Progress: ${latestProgress.percentage}%` : '',
             signalCount > 0 ? `Signals: ${signalCount}` : ''
           ].filter(Boolean),
-          outcomePositive: node.kind === 'decision' ? state.decision.current?.outcomePositive : undefined
+          outcomePositive:
+            node.kind === 'decision'
+              ? // `null` (BE-3: decision resolved without outcome semantics) renders like
+                // "no outcome flag" — map to undefined so the accent border is muted.
+                (state.decision.current?.outcomePositive ?? undefined) === null
+                ? undefined
+                : (state.decision.current?.outcomePositive ?? undefined)
+              : undefined
         }
       } satisfies Node<FlowNodeData>;
     });
@@ -193,12 +196,10 @@ export function ExecutionGraph({
     });
   }, [showCriticalPath, showParallelBranches, state.graph.edges]);
 
-  const summaryCards = [
-    { label: 'Participants', value: String(state.participants.length) },
-    { label: 'Signals', value: String(state.signals.signals.length) },
-    { label: 'Events', value: String(state.timeline.totalEvents) },
-    { label: 'Messages', value: `${state.outboundMessages.accepted}/${state.outboundMessages.total}` }
-  ];
+  // Q2 — keep only Participants (graph-specific context). Signals / Events /
+  // Messages live in RunOverviewCard's KPI strip (Q1 routes them by run.status)
+  // and as per-node badges on the graph itself.
+  const summaryCards = [{ label: 'Participants', value: String(state.participants.length) }];
 
   return (
     <div className="stack">
