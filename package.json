@@ -20,14 +20,6 @@
     "dev:demo": "NEXT_PUBLIC_MACP_UI_DEMO_MODE=true next dev",
     "dev:real": "NEXT_PUBLIC_MACP_UI_DEMO_MODE=false next dev",
     "dev:e2e": "npx env-cmd -f .env.e2e next dev",
-    "test:e2e:setup": "docker compose -f docker-compose.e2e.yml up -d --build --wait",
-    "test:e2e": "npx playwright test",
-    "test:e2e:headed": "npx playwright test --headed",
-    "test:e2e:ui": "npx playwright test --ui",
-    "test:e2e:teardown": "docker compose -f docker-compose.e2e.yml down -v",
-    "test:e2e:visual": "npx playwright test --config playwright.visual.config.ts",
-    "test:e2e:visual:update": "npx playwright test --config playwright.visual.config.ts --update-snapshots=all",
-    "test:e2e:visual:ui": "npx playwright test --config playwright.visual.config.ts --ui",
     "local:up": "./scripts/local-stack.sh up",
     "local:down": "./scripts/local-stack.sh down",
     "local:status": "./scripts/local-stack.sh status"
@@ -56,7 +48,6 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
