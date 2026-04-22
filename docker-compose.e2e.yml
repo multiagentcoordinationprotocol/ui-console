@@ -39,9 +39,9 @@ services:
     ports:
       - "50051:50051"
     environment:
-      MACP_BIND_ADDR: "0.0.0.0:50051"
+      MACP_BIND_ADDR: "[::]:50051"
       MACP_ALLOW_INSECURE: "1"
-      MACP_ALLOW_DEV_SENDER_HEADER: "1"
+      MACP_AUTH_TOKENS_JSON: '{"tokens":[{"token":"tok-cp-observer","sender":"control-plane","can_start_sessions":false,"is_observer":true,"can_manage_mode_registry":false},{"token":"tok-risk","sender":"risk-agent","can_start_sessions":true},{"token":"tok-fraud","sender":"fraud-agent","can_start_sessions":false},{"token":"tok-growth","sender":"growth-agent","can_start_sessions":false},{"token":"tok-compliance","sender":"compliance-agent","can_start_sessions":false}]}'
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/50051'"]
       interval: 3s
@@ -65,9 +65,9 @@ services:
       RUNTIME_ADDRESS: runtime:50051
       RUNTIME_TLS: "false"
       RUNTIME_ALLOW_INSECURE: "true"
-      RUNTIME_USE_DEV_HEADER: "true"
-      RUNTIME_DEV_AGENT_ID: control-plane
+      RUNTIME_BEARER_TOKEN: "tok-cp-observer"
       AUTH_API_KEYS: ""
+      SESSION_DISCOVERY_ENABLED: "true"
       CORS_ORIGIN: http://localhost:3000
       LOG_LEVEL: info
       OTEL_ENABLED: "true"
@@ -104,16 +104,17 @@ services:
       HOST: "0.0.0.0"
       NODE_ENV: development
       PACKS_DIR: /app/packs
-      CONTROL_PLANE_BASE_URL: http://control-plane:3001
-      CONTROL_PLANE_API_KEY: "e2e-test"
-      CONTROL_PLANE_TIMEOUT_MS: "15000"
       AUTO_BOOTSTRAP_EXAMPLE_AGENTS: "true"
+      MACP_RUNTIME_ADDRESS: "runtime:50051"
+      MACP_RUNTIME_TLS: "false"
+      MACP_RUNTIME_ALLOW_INSECURE: "true"
+      EXAMPLES_SERVICE_AGENT_TOKENS_JSON: '{"risk-agent":"tok-risk","fraud-agent":"tok-fraud","growth-agent":"tok-growth","compliance-agent":"tok-compliance"}'
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
       AUTH_API_KEYS: ""
       LOG_LEVEL: info
       REGISTRY_CACHE_TTL_MS: "0"
     depends_on:
-      control-plane:
+      runtime:
         condition: service_healthy
     healthcheck:
       test: >-

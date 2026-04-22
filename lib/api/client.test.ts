@@ -17,7 +17,6 @@ import {
   batchExportRuns,
   getRunState,
   getRunEvents,
-  getRunMessages,
   getRunMetrics,
   getMockFrames,
   getQuickCompareTarget,
@@ -99,7 +98,10 @@ describe('demo mode API client', () => {
       { scenarioRef: 'fraud/check@1.0.0', templateId: 'default', inputs: { key: 'value' } },
       DEMO
     );
-    expect(result).toHaveProperty('executionRequest');
+    expect(result).toHaveProperty('runDescriptor');
+    expect(result).toHaveProperty('mode');
+    expect(result).toHaveProperty('sessionId');
+    expect(result).toHaveProperty('scenarioMeta');
   });
 
   it('getAgentProfiles returns agent profile array', async () => {
@@ -205,12 +207,6 @@ describe('demo mode API client', () => {
     expect(Array.isArray(bundles)).toBe(true);
     expect(bundles).toHaveLength(ids.length);
     expect(bundles[0]).toHaveProperty('run');
-  });
-
-  it('getRunMessages returns mock messages array', async () => {
-    const runs = await listRuns(DEMO);
-    const messages = await getRunMessages(runs[0].id, DEMO);
-    expect(Array.isArray(messages)).toBe(true);
   });
 
   it('getLogsData with runId returns events for that run', async () => {

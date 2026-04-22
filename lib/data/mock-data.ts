@@ -376,48 +376,23 @@ export const MOCK_LAUNCH_SCHEMAS: Record<string, LaunchSchemaResponse> = {
 };
 
 export const MOCK_COMPILED_RUN: CompileLaunchResult = {
-  executionRequest: {
+  runDescriptor: {
     mode: 'live',
     runtime: { kind: 'rust', version: 'v1' },
     session: {
+      sessionId: '00000000-0000-4000-8000-0000fa1d0001',
       modeName: 'macp.mode.decision.v1',
       modeVersion: '1.0.0',
       configurationVersion: 'config.default',
       policyVersion: 'policy.default',
       ttlMs: 300000,
-      initiatorParticipantId: 'risk-agent',
-      participants: [
-        { id: 'fraud-agent', role: 'fraud', transportIdentity: 'agent://fraud-agent' },
-        { id: 'growth-agent', role: 'growth', transportIdentity: 'agent://growth-agent' },
-        { id: 'risk-agent', role: 'risk', transportIdentity: 'agent://risk-agent' }
-      ],
-      context: {
-        customerId: 'CUST-1001',
-        transactionAmount: 2400,
-        deviceTrustScore: 0.18,
-        accountAgeDays: 14,
-        isVipCustomer: true,
-        priorChargebacks: 1
-      },
+      participants: [{ id: 'fraud-agent' }, { id: 'growth-agent' }, { id: 'risk-agent' }],
       metadata: {
         source: 'scenario-registry',
         sourceRef: 'fraud/high-value-new-device@1.0.0',
         intent: 'evaluate transaction'
       }
     },
-    kickoff: [
-      {
-        from: 'risk-agent',
-        to: ['fraud-agent', 'growth-agent'],
-        kind: 'proposal',
-        messageType: 'Proposal',
-        payload: {
-          proposal_id: 'CUST-1001-initial-review',
-          option: 'evaluate_transaction',
-          rationale: 'Decide whether to approve, step_up, or decline the transaction.'
-        }
-      }
-    ],
     execution: {
       idempotencyKey: 'fraud-high-value-demo-1',
       tags: ['demo', 'fraud', 'examples'],
@@ -426,6 +401,47 @@ export const MOCK_COMPILED_RUN: CompileLaunchResult = {
         actorType: 'service'
       }
     }
+  },
+  initiator: {
+    participantId: 'risk-agent',
+    sessionStart: {
+      intent: 'evaluate transaction',
+      participants: ['fraud-agent', 'growth-agent', 'risk-agent'],
+      ttlMs: 300000,
+      modeVersion: '1.0.0',
+      configurationVersion: 'config.default',
+      policyVersion: 'policy.default',
+      context: {
+        customerId: 'CUST-1001',
+        transactionAmount: 2400,
+        deviceTrustScore: 0.18,
+        accountAgeDays: 14,
+        isVipCustomer: true,
+        priorChargebacks: 1
+      }
+    },
+    kickoff: {
+      messageType: 'Proposal',
+      payload: {
+        proposal_id: 'CUST-1001-initial-review',
+        option: 'evaluate_transaction',
+        rationale: 'Decide whether to approve, step_up, or decline the transaction.'
+      }
+    }
+  },
+  sessionId: '00000000-0000-4000-8000-0000fa1d0001',
+  mode: 'live',
+  scenarioMeta: {
+    policyHints: { type: 'majority', description: 'Simple majority vote', threshold: 0.5, vetoEnabled: false },
+    sessionContext: {
+      customerId: 'CUST-1001',
+      transactionAmount: 2400,
+      deviceTrustScore: 0.18,
+      accountAgeDays: 14,
+      isVipCustomer: true,
+      priorChargebacks: 1
+    },
+    initiatorParticipantId: 'risk-agent'
   },
   display: {
     title: 'High Value Purchase From New Device',
@@ -544,7 +560,9 @@ const liveBaseState: RunStateProjection = {
     runtimeSessionId: 'session-live-001',
     startedAt: isoMinutesAgo(3),
     traceId: 'trace-live-fraud-001',
-    modeName: 'macp.mode.decision.v1'
+    modeName: 'macp.mode.decision.v1',
+    contextId: 'ctx:sha256:a1b2c3d4e5f6',
+    extensionKeys: ['ctxm', 'billing']
   },
   participants: [
     { participantId: 'fraud-agent', role: 'fraud', status: 'waiting' },
@@ -784,6 +802,39 @@ const completedState: RunStateProjection = {
       }
     ],
     quorumStatus: 'reached'
+  },
+  llm: {
+    calls: [
+      {
+        participantId: 'risk-agent',
+        model: 'claude-sonnet-4-6',
+        promptTokens: 1820,
+        completionTokens: 312,
+        totalTokens: 2132,
+        latencyMs: 870,
+        estimatedCostUsd: 0.0104,
+        ts: isoMinutesAgo(56),
+        messageId: 'msg-risk-llm-1'
+      },
+      {
+        participantId: 'fraud-agent',
+        model: 'gpt-4o-mini',
+        promptTokens: 980,
+        completionTokens: 124,
+        totalTokens: 1104,
+        latencyMs: 420,
+        estimatedCostUsd: 0.00022,
+        ts: isoMinutesAgo(57),
+        messageId: 'msg-fraud-llm-1'
+      }
+    ],
+    totals: {
+      callCount: 2,
+      promptTokens: 2800,
+      completionTokens: 436,
+      totalTokens: 3236,
+      estimatedCostUsd: 0.01062
+    }
   }
 };
 
@@ -1090,19 +1141,20 @@ export const MOCK_RUN_EVENTS: Record<string, CanonicalEvent[]> = {
       subject: { kind: 'participant', id: 'risk-agent' },
       source: { kind: 'control-plane', name: 'macp-control-plane' },
       data: {
-        participantId: 'risk-agent',
         model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
         promptTokens: 1820,
         completionTokens: 312,
+        totalTokens: 2132,
         latencyMs: 870,
+        estimatedCostUsd: 0.0104,
         prompt:
           'You are a fraud risk analyst. Given the transaction signals below, ' +
           'recommend APPROVE, STEP_UP, or DECLINE with confidence and reasons.\n\n' +
           'Signals: chargeback_history (medium, 0.62), vip_customer (info, 0.91)',
         response:
           'APPROVE (confidence 0.87). Chargeback history is within tolerance; ' +
-          'VIP signal offsets device-trust risk.',
-        resultingEventIds: ['evt-decision-proposed']
+          'VIP signal offsets device-trust risk.'
       }
     },
     {
@@ -1114,12 +1166,14 @@ export const MOCK_RUN_EVENTS: Record<string, CanonicalEvent[]> = {
       subject: { kind: 'participant', id: 'fraud-agent' },
       source: { kind: 'control-plane', name: 'macp-control-plane' },
       data: {
-        participantId: 'fraud-agent',
         model: 'gpt-4o-mini',
+        provider: 'openai',
         promptTokens: 980,
         completionTokens: 124,
+        totalTokens: 1104,
         latencyMs: 420,
-        redactedPrompt: 'Inspect transaction [REDACTED] for CUST-1001. Return structured fraud signals.',
+        estimatedCostUsd: 0.00022,
+        prompt: 'Inspect transaction for CUST-1001. Return structured fraud signals.',
         response: 'chargeback_history=0.62, device_fingerprint_risk=0.48'
       }
     }
@@ -1404,55 +1458,6 @@ export const MOCK_RUN_ARTIFACTS: Record<string, Artifact[]> = {
         severity: 'SEV-1'
       },
       createdAt: isoMinutesAgo(414)
-    }
-  ]
-};
-
-export const MOCK_RUN_MESSAGES: Record<string, Record<string, unknown>[]> = {
-  [LIVE_RUN_ID]: [
-    {
-      id: 'msg-live-1',
-      status: 'accepted',
-      from: 'risk-agent',
-      to: ['fraud-agent', 'growth-agent'],
-      messageType: 'Proposal'
-    },
-    { id: 'msg-live-2', status: 'accepted', from: 'fraud-agent', to: ['risk-agent'], messageType: 'Evaluation' },
-    { id: 'msg-live-3', status: 'accepted', from: 'growth-agent', to: ['risk-agent'], messageType: 'Evaluation' }
-  ],
-  [COMPLETED_RUN_ID]: [
-    {
-      id: 'msg-complete-1',
-      status: 'accepted',
-      from: 'risk-agent',
-      to: ['fraud-agent', 'growth-agent'],
-      messageType: 'Proposal'
-    },
-    {
-      id: 'msg-complete-2',
-      status: 'accepted',
-      from: 'risk-agent',
-      to: ['fraud-agent'],
-      messageType: 'ApprovalRequest'
-    }
-  ],
-  [FAILED_RUN_ID]: [
-    {
-      id: 'msg-failed-1',
-      status: 'rejected',
-      from: 'policy-agent',
-      to: ['growth-agent'],
-      messageType: 'Evaluation',
-      error: 'TIMEOUT'
-    }
-  ],
-  [DECLINED_RUN_ID]: [
-    {
-      id: 'msg-ops-1',
-      status: 'accepted',
-      from: 'risk-agent',
-      to: ['ops-agent', 'comms-agent'],
-      messageType: 'Proposal'
     }
   ]
 };

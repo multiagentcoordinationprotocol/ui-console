@@ -21,6 +21,7 @@ import {
   validateRun
 } from '@/lib/api/client';
 import { PresetManager } from '@/components/runs/preset-manager';
+import { RunPreviewCard } from '@/components/runs/run-preview-card';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 import type { CompileLaunchResult } from '@/lib/types';
 import type { LaunchPreset } from '@/lib/stores/launch-presets-store';
@@ -56,6 +57,8 @@ function NewRunPageContent() {
   const [runLabel, setRunLabel] = useState('');
   const [tagsText, setTagsText] = useState('macp-ui,nextjs');
   const [actorId, setActorId] = useState('ajitkoti');
+  const [contextIdInput, setContextIdInput] = useState('');
+  const [extensionKeysInput, setExtensionKeysInput] = useState('');
   const [compileResult, setCompileResult] = useState<CompileLaunchResult | undefined>();
   const [validationResult, setValidationResult] = useState<Record<string, unknown> | undefined>();
   const [bootstrapResult, setBootstrapResult] = useState<Record<string, unknown> | undefined>();
@@ -70,7 +73,7 @@ function NewRunPageContent() {
 
   useEffect(() => {
     if (!catalogQuery.data?.length) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing default from async data
+     
     if (!packSlug) setPackSlug(catalogQuery.data[0].pack.slug);
   }, [catalogQuery.data, packSlug]);
 
@@ -84,7 +87,7 @@ function NewRunPageContent() {
     [scenarioSlug, scenariosForPack]
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect -- cascading defaults from async catalog data */
+   
   useEffect(() => {
     if (!selectedScenario) return;
     if (!scenarioSlug || !scenariosForPack.some((scenario) => scenario.scenario === scenarioSlug)) {
@@ -93,7 +96,7 @@ function NewRunPageContent() {
     if (!version) setVersion(selectedScenario.versions[0] ?? '1.0.0');
     if (!templateId) setTemplateId(selectedScenario.templates[0] ?? 'default');
   }, [scenarioSlug, scenariosForPack, selectedScenario, templateId, version]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   const schemaQuery = useQuery({
     queryKey: ['launch-schema', packSlug, selectedScenario?.scenario, version, templateId, demoMode],
@@ -103,7 +106,7 @@ function NewRunPageContent() {
 
   useEffect(() => {
     if (!schemaQuery.data) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing form state from schema query
+     
     setFormValues(schemaQuery.data.defaults ?? {});
     setJsonText(JSON.stringify(schemaQuery.data.defaults ?? {}, null, 2));
   }, [schemaQuery.data]);
@@ -125,8 +128,8 @@ function NewRunPageContent() {
         demoMode
       );
 
-      compiled.executionRequest.execution = {
-        ...(compiled.executionRequest.execution ?? {}),
+      compiled.runDescriptor.execution = {
+        ...(compiled.runDescriptor.execution ?? {}),
         tags: tagsText
           .split(',')
           .map((tag) => tag.trim())
@@ -134,10 +137,38 @@ function NewRunPageContent() {
         requester: { actorId, actorType: 'user' }
       };
       if (runLabel) {
-        compiled.executionRequest.session.metadata = {
-          ...(compiled.executionRequest.session.metadata ?? {}),
+        compiled.runDescriptor.session.metadata = {
+          ...(compiled.runDescriptor.session.metadata ?? {}),
           runLabel
         };
+      }
+      const trimmedContextId = contextIdInput.trim();
+      const trimmedExtensions = extensionKeysInput.trim();
+      if (trimmedContextId || trimmedExtensions) {
+        compiled.initiator ??= {
+          participantId:
+            compiled.scenarioMeta.initiatorParticipantId ??
+            compiled.runDescriptor.session.participants[0]?.id ??
+            'initiator',
+          sessionStart: {
+            intent: 'launch',
+            participants: compiled.runDescriptor.session.participants.map((p) => p.id),
+            ttlMs: compiled.runDescriptor.session.ttlMs,
+            modeVersion: compiled.runDescriptor.session.modeVersion,
+            configurationVersion: compiled.runDescriptor.session.configurationVersion,
+            policyVersion: compiled.runDescriptor.session.policyVersion
+          }
+        };
+        if (trimmedContextId) {
+          compiled.initiator.sessionStart.contextId = trimmedContextId;
+        }
+        if (trimmedExtensions) {
+          const keys = trimmedExtensions
+            .split(',')
+            .map((k) => k.trim())
+            .filter(Boolean);
+          compiled.initiator.sessionStart.extensions = Object.fromEntries(keys.map((k) => [k, '']));
+        }
       }
       setCompileResult(compiled);
       return compiled;
@@ -147,7 +178,7 @@ function NewRunPageContent() {
   const validateMutation = useMutation({
     mutationFn: async () => {
       const compiled = compileResult ?? (await compileMutation.mutateAsync());
-      const validation = await validateRun(compiled.executionRequest as unknown as Record<string, unknown>, demoMode);
+      const validation = await validateRun(compiled.runDescriptor as unknown as Record<string, unknown>, demoMode);
       setValidationResult(validation as unknown as Record<string, unknown>);
       return validation;
     }
@@ -161,8 +192,7 @@ function NewRunPageContent() {
           templateId,
           mode,
           inputs: effectiveInputs.value ?? {},
-          bootstrapAgents: true,
-          submitToControlPlane: true
+          bootstrapAgents: true
         },
         demoMode
       );
@@ -170,8 +200,8 @@ function NewRunPageContent() {
       return result;
     },
     onSuccess: (result) => {
-      const runId = result.controlPlane?.runId ?? '';
-      if (runId) router.push(`/runs/live/${runId}`);
+      const sessionId = result.sessionId ?? '';
+      if (sessionId) router.push(`/runs/live/${sessionId}`);
     }
   });
 
@@ -183,8 +213,7 @@ function NewRunPageContent() {
           templateId,
           mode,
           inputs: effectiveInputs.value ?? {},
-          bootstrapAgents: true,
-          submitToControlPlane: true
+          bootstrapAgents: true
         },
         demoMode
       );
@@ -192,8 +221,8 @@ function NewRunPageContent() {
       return result;
     },
     onSuccess: (result) => {
-      const runId = result.controlPlane?.runId ?? '';
-      if (runId) router.push(`/runs/live/${runId}`);
+      const sessionId = result.sessionId ?? '';
+      if (sessionId) router.push(`/runs/live/${sessionId}`);
     }
   });
 
@@ -419,6 +448,22 @@ function NewRunPageContent() {
               <FieldLabel>Requester actor ID</FieldLabel>
               <Input value={actorId} onChange={(event) => setActorId(event.target.value)} placeholder="ajitkoti" />
             </div>
+            <div>
+              <FieldLabel>Context ID</FieldLabel>
+              <Input
+                value={contextIdInput}
+                onChange={(event) => setContextIdInput(event.target.value)}
+                placeholder="ctx:sha256:abc123... (optional)"
+              />
+            </div>
+            <div>
+              <FieldLabel>Extension keys</FieldLabel>
+              <Input
+                value={extensionKeysInput}
+                onChange={(event) => setExtensionKeysInput(event.target.value)}
+                placeholder="ctxm, billing, audit (comma-separated, optional)"
+              />
+            </div>
             <div className="inline-list">
               <Badge label={schema.runtime.kind} tone="info" />
               <Badge label={schema.launchSummary.modeName} tone="info" />
@@ -462,6 +507,8 @@ function NewRunPageContent() {
             setTagsText(preset.tags);
             setActorId(preset.actorId);
             setRunLabel(preset.runLabel);
+            setContextIdInput(preset.contextId ?? '');
+            setExtensionKeysInput(preset.extensionKeys ?? '');
           }}
           currentValues={{
             name: '',
@@ -473,10 +520,21 @@ function NewRunPageContent() {
             inputs: effectiveInputs.value ?? {},
             tags: tagsText,
             actorId,
-            runLabel
+            runLabel,
+            contextId: contextIdInput,
+            extensionKeys: extensionKeysInput
           }}
         />
       </div>
+
+      {compileResult && (
+        <RunPreviewCard
+          compiled={compileResult}
+          onEdit={() => setCompileResult(undefined)}
+          onSubmit={() => submitMutation.mutate()}
+          isSubmitting={submitMutation.isPending}
+        />
+      )}
 
       <div className="grid-2">
         <Card>
@@ -499,20 +557,12 @@ function NewRunPageContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="stack">
-            {bootstrapResult && typeof bootstrapResult === 'object' && 'controlPlane' in bootstrapResult && (
+            {bootstrapResult && typeof bootstrapResult === 'object' && 'sessionId' in bootstrapResult && (
               <div className="inline-list">
-                {(bootstrapResult as { controlPlane?: { policyRegistered?: boolean; policyVersion?: string } })
-                  .controlPlane?.policyRegistered && (
-                  <Badge
-                    label={`Policy registered: ${(bootstrapResult as { controlPlane: { policyVersion?: string } }).controlPlane.policyVersion ?? 'unknown'}`}
-                    tone="success"
-                  />
-                )}
-                {(bootstrapResult as { controlPlane?: { policyVersion?: string } }).controlPlane?.policyVersion &&
-                  (bootstrapResult as { controlPlane?: { policyVersion?: string } }).controlPlane?.policyVersion !==
-                    'policy.default' &&
-                  !(bootstrapResult as { controlPlane?: { policyRegistered?: boolean } }).controlPlane
-                    ?.policyRegistered && <Badge label="Policy registration skipped" tone="warning" />}
+                <Badge
+                  label={`Session: ${(bootstrapResult as { sessionId?: string }).sessionId ?? ''}`}
+                  tone="success"
+                />
               </div>
             )}
             <JsonViewer

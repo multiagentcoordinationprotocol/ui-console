@@ -87,6 +87,34 @@ export function RunOverviewCard({
           ) : null}
         </div>
 
+        {(state?.run.contextId ||
+          (state?.run.extensionKeys && state.run.extensionKeys.length > 0) ||
+          metrics?.sessionState) && (
+          <div className="inline-list">
+            {metrics?.sessionState && metrics.sessionState !== 'SESSION_STATE_UNSPECIFIED' && (
+              <Badge
+                label={metrics.sessionState.replace('SESSION_STATE_', '').toLowerCase()}
+                tone={
+                  metrics.sessionState === 'SESSION_STATE_OPEN'
+                    ? 'info'
+                    : metrics.sessionState === 'SESSION_STATE_RESOLVED'
+                      ? 'success'
+                      : 'danger'
+                }
+              />
+            )}
+            {state?.run.contextId && (
+              <Badge
+                label={`ctx: ${state.run.contextId.length > 24 ? state.run.contextId.slice(0, 24) + '...' : state.run.contextId}`}
+                tone="neutral"
+              />
+            )}
+            {(state?.run.extensionKeys ?? []).map((key) => (
+              <Badge key={key} label={key} tone="neutral" />
+            ))}
+          </div>
+        )}
+
         <div className="metric-strip">
           <div className="metric-box">
             <div className="muted small">Elapsed</div>
@@ -107,6 +135,22 @@ export function RunOverviewCard({
           {/* Q3: Tokens + Est. cost live in the Run observability summary,
               not the top overview card. Removed from here to avoid duplication. */}
         </div>
+
+        {run.status === 'failed' && run.metadata?.error != null && (
+          <div
+            style={{
+              padding: 'var(--space-sm)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid var(--danger, #ef4444)'
+            }}
+          >
+            <div className="muted small" style={{ marginBottom: '4px', fontWeight: 600 }}>
+              Failure reason
+            </div>
+            <div style={{ fontSize: '0.875rem' }}>{String(run.metadata.error as string)}</div>
+          </div>
+        )}
 
         <div className="section-actions">
           {run.status === 'running' && onCancel ? (

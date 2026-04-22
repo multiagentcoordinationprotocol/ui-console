@@ -11,7 +11,6 @@ import {
   createRunResponse,
   validateRunResponse,
   batchExportResponse,
-  runMessages,
   canonicalEvents,
   auditLogs
 } from './fixtures/backend-responses';
@@ -496,25 +495,6 @@ describe('Runs Lifecycle (integration)', () => {
 
       const postBody = mocker.requests.at(-1)!.body as Record<string, unknown>;
       expect(postBody.runIds).toEqual(ids);
-    });
-  });
-
-  describe('getRunMessages', () => {
-    it('getRunMessages returns messages array', async () => {
-      mocker.on('GET', `/api/proxy/control-plane/runs/${RUN_ID_1}/messages`, () => ({
-        status: 200,
-        body: runMessages(RUN_ID_1)
-      }));
-
-      const { getRunMessages } = await import('@/lib/api/client');
-      const messages = await getRunMessages(RUN_ID_1, false);
-
-      expect(messages).toHaveLength(2);
-      expect(messages[0]).toHaveProperty('id', 'msg-1');
-      expect(messages[0]).toHaveProperty('runId', RUN_ID_1);
-      expect(messages[0]).toHaveProperty('from', 'fraud-detector');
-      expect(messages[0]).toHaveProperty('messageType', 'Signal');
-      expect(messages[1]).toHaveProperty('id', 'msg-2');
     });
   });
 

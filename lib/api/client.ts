@@ -15,7 +15,6 @@ import {
   MOCK_RUN_ARTIFACTS,
   MOCK_RUN_EVENTS,
   MOCK_RUN_FRAMES,
-  MOCK_RUN_MESSAGES,
   MOCK_RUN_METRICS,
   MOCK_RUN_STATES,
   MOCK_RUN_TRACES,
@@ -163,6 +162,7 @@ export async function getLaunchSchema(
 
 export async function compileLaunch(input: CompileLaunchRequest, demoMode: boolean): Promise<CompileLaunchResult> {
   if (demoMode) {
+    const mode = input.mode ?? 'live';
     return maybeDelay({
       ...MOCK_COMPILED_RUN,
       display: {
@@ -170,13 +170,23 @@ export async function compileLaunch(input: CompileLaunchRequest, demoMode: boole
         scenarioRef: input.scenarioRef,
         templateId: input.templateId
       },
-      executionRequest: {
-        ...MOCK_COMPILED_RUN.executionRequest,
-        mode: input.mode ?? 'live',
-        session: {
-          ...MOCK_COMPILED_RUN.executionRequest.session,
-          context: input.inputs
-        }
+      mode,
+      runDescriptor: {
+        ...MOCK_COMPILED_RUN.runDescriptor,
+        mode
+      },
+      initiator: MOCK_COMPILED_RUN.initiator
+        ? {
+            ...MOCK_COMPILED_RUN.initiator,
+            sessionStart: {
+              ...MOCK_COMPILED_RUN.initiator.sessionStart,
+              context: input.inputs
+            }
+          }
+        : undefined,
+      scenarioMeta: {
+        ...MOCK_COMPILED_RUN.scenarioMeta,
+        sessionContext: input.inputs
       }
     });
   }
@@ -188,13 +198,11 @@ export async function compileLaunch(input: CompileLaunchRequest, demoMode: boole
 }
 
 export async function runExample(
-  input: CompileLaunchRequest & { bootstrapAgents?: boolean; submitToControlPlane?: boolean },
+  input: CompileLaunchRequest & { bootstrapAgents?: boolean },
   demoMode: boolean
 ): Promise<RunExampleResult> {
   if (demoMode) {
     const compiled = await compileLaunch(input, true);
-    const policyVersion = compiled.executionRequest.session.policyVersion ?? 'policy.default';
-    const isNonDefault = policyVersion !== 'policy.default';
     return maybeDelay({
       compiled,
       hostedAgents: MOCK_LAUNCH_SCHEMAS['fraud/high-value-new-device@1.0.0:default'].agents.map((agent) => ({
@@ -202,16 +210,7 @@ export async function runExample(
         participantId: agent.agentRef,
         status: 'bootstrapped'
       })),
-      controlPlane: {
-        baseUrl: 'http://localhost:3001',
-        validated: true,
-        submitted: input.submitToControlPlane !== false,
-        runId: LIVE_RUN_ID,
-        status: 'running',
-        traceId: 'trace-live-fraud-001',
-        policyRegistered: isNonDefault,
-        policyVersion
-      }
+      sessionId: LIVE_RUN_ID
     });
   }
 
@@ -569,19 +568,18 @@ export async function getJaegerTrace(traceId: string): Promise<JaegerTrace | nul
 }
 
 export function getJaegerUiUrl(traceId: string): string {
-  const base =
-    typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':16686') : 'http://localhost:16686';
+  const envBase = process.env.NEXT_PUBLIC_JAEGER_BASE_URL;
+  const base = envBase
+    ? envBase
+    : typeof window !== 'undefined'
+      ? window.location.origin.replace(/:\d+$/, ':16686')
+      : 'http://localhost:16686';
   return `${base}/trace/${traceId}`;
 }
 
 export async function getRunArtifacts(runId: string, demoMode: boolean): Promise<Artifact[]> {
   if (demoMode) return maybeDelay(MOCK_RUN_ARTIFACTS[runId] ?? []);
   return fetchJson<Artifact[]>('control-plane', `/runs/${runId}/artifacts`);
-}
-
-export async function getRunMessages(runId: string, demoMode: boolean): Promise<Record<string, unknown>[]> {
-  if (demoMode) return maybeDelay(MOCK_RUN_MESSAGES[runId] ?? []);
-  return fetchJson<Record<string, unknown>[]>('control-plane', `/runs/${runId}/messages`);
 }
 
 export async function cancelRun(
@@ -792,7 +790,7 @@ export async function getDashboardOverview(
   const suffix = params.toString() ? `?${params.toString()}` : '';
 
   let overviewDegraded = false;
-  const [cpOverview, runs, packs, runtimeHealth] = await Promise.all([
+  const [cpOverview, packs, runtimeHealth] = await Promise.all([
     fetchJson<CpOverview>('control-plane', `/dashboard/overview${suffix}`).catch((error): CpOverview => {
       console.warn(
         '[MACP UI] Dashboard overview endpoint unavailable:',
@@ -801,14 +799,22 @@ export async function getDashboardOverview(
       overviewDegraded = true;
       return {};
     }),
-    listRuns(false, {
-      limit: 20,
-      ...(query.scenarioRef ? { scenarioRef: query.scenarioRef } : {}),
-      ...(query.environment ? { environment: query.environment } : {})
-    }),
     listPacks(false),
     getRuntimeHealth(false)
   ]);
+
+  // CP `/dashboard/overview` includes `recentRuns` pre-filtered by
+  // `scenarioRef`/`environment`. Use it directly and skip a second
+  // `listRuns` round-trip; fall back only when the overview call
+  // failed or the field is missing (older CP builds).
+  const runs: RunRecord[] =
+    cpOverview.recentRuns && cpOverview.recentRuns.length > 0
+      ? cpOverview.recentRuns.map((raw) => normalizeRun(raw))
+      : await listRuns(false, {
+          limit: 20,
+          ...(query.scenarioRef ? { scenarioRef: query.scenarioRef } : {}),
+          ...(query.environment ? { environment: query.environment } : {})
+        });
 
   const cpKpis = cpOverview.kpis ?? {};
   const totalRuns = cpKpis.totalRuns ?? runs.length;
@@ -859,8 +865,10 @@ export async function getDashboardOverview(
       latencyP99: toChartPoints(cpCharts.latencyP99),
       cost: toChartPoints(cpCharts.cost),
       successRate: toChartPoints(cpCharts.successRate),
-      decisionOutcomePositive: toChartPoints(cpCharts.decisionOutcomePositive),
-      decisionOutcomeNegative: toChartPoints(cpCharts.decisionOutcomeNegative),
+      // CP emits a single `decisionOutcome` series whose values carry the
+      // net outcome per bucket (positive contributions as +1, negative as
+      // -1), not separate positive/negative arrays.
+      decisionOutcome: toChartPoints(cpCharts.decisionOutcome),
       perScenario: toChartPoints(cpCharts.perScenario)
     },
     degraded: overviewDegraded || undefined
@@ -1015,20 +1023,6 @@ export async function updateWebhook(
   });
 }
 
-/* ─── Update run context ─── */
-
-export async function updateRunContext(
-  runId: string,
-  body: { from: string; context: Record<string, unknown> },
-  demoMode: boolean
-): Promise<MutationAck> {
-  if (demoMode) return maybeDelay({ ok: true, runId });
-  return fetchJson<MutationAck>('control-plane', `/runs/${runId}/context`, {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
-}
-
 /* ─── Create artifact ─── */
 
 export async function createArtifact(
@@ -1081,11 +1075,11 @@ export async function getAgentMetrics(demoMode: boolean): Promise<AgentMetricsEn
     return maybeDelay(
       MOCK_AGENT_PROFILES.map((agent) => ({
         agentRef: agent.agentRef,
-        runs: agent.metrics.runs,
-        signals: agent.metrics.signals,
+        runs: agent.metrics?.runs ?? 0,
+        signals: agent.metrics?.signals ?? 0,
         messages: 0,
-        averageLatencyMs: agent.metrics.averageLatencyMs,
-        averageConfidence: agent.metrics.averageConfidence
+        averageLatencyMs: agent.metrics?.averageLatencyMs,
+        averageConfidence: agent.metrics?.averageConfidence ?? 0
       }))
     );
   }

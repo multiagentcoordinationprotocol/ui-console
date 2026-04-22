@@ -35,7 +35,6 @@ import {
   getRun,
   getRunArtifacts,
   getRunEvents,
-  getRunMessages,
   getRunMetrics,
   getRunState,
   getRunTraces,
@@ -93,10 +92,6 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
   const artifactsQuery = useQuery({
     queryKey: ['run-artifacts', runId, demoMode],
     queryFn: () => getRunArtifacts(runId, demoMode)
-  });
-  const messagesQuery = useQuery({
-    queryKey: ['run-messages', runId, demoMode],
-    queryFn: () => getRunMessages(runId, demoMode)
   });
 
   const traceId = tracesQuery.data?.traceId ?? '';
@@ -252,14 +247,25 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
       { label: 'Signals', value: String(metricsQuery.data.signalCount) },
       { label: 'Trace spans', value: String(jaegerSpanCount || tracesQuery.data.spanCount) }
     ];
-    if (metricsQuery.data.totalTokens) {
-      items.push({ label: 'Tokens', value: String(metricsQuery.data.totalTokens) });
+    // CP `RunStateProjection.llm.totals` aggregates message-metadata
+    // LLM calls into `callCount`, token counts, and estimated cost.
+    // Prefer these over MetricsSummary when available, and fall back to
+    // MetricsSummary for older CP builds.
+    const llmTotals = effectiveState?.llm?.totals;
+    const callCount = llmTotals?.callCount;
+    if (callCount && callCount > 0) {
+      items.push({ label: 'LLM calls', value: String(callCount) });
     }
-    if (metricsQuery.data.estimatedCostUsd) {
-      items.push({ label: 'Est. cost', value: `$${metricsQuery.data.estimatedCostUsd.toFixed(4)}` });
+    const totalTokens = llmTotals?.totalTokens ?? metricsQuery.data.totalTokens;
+    if (totalTokens) {
+      items.push({ label: 'Tokens', value: String(totalTokens) });
+    }
+    const estimatedCostUsd = llmTotals?.estimatedCostUsd ?? metricsQuery.data.estimatedCostUsd;
+    if (estimatedCostUsd) {
+      items.push({ label: 'Est. cost', value: `$${estimatedCostUsd.toFixed(4)}` });
     }
     return items;
-  }, [metricsQuery.data, tracesQuery.data, jaegerSpanCount]);
+  }, [metricsQuery.data, tracesQuery.data, jaegerSpanCount, effectiveState?.llm?.totals]);
 
   const replayFrames = useMemo(() => (liveMode ? [] : getMockFrames(runId)), [liveMode, runId]);
   const replayFrameQuery = useQuery({
@@ -379,7 +385,6 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
             metrics={metricsQuery.data}
             traceSummary={tracesQuery.data}
             artifacts={artifactsQuery.data}
-            messages={messagesQuery.data}
           />
         </ErrorBoundary>
         <ErrorBoundary>
@@ -445,16 +450,13 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
           ) : null}
           <Card>
             <CardHeader>
-              <CardTitle>Artifacts and messages</CardTitle>
+              <CardTitle>Artifacts</CardTitle>
               <CardDescription>
-                Trace bundles, decision reports, and outbound MACP messages linked to this run.
+                Trace bundles, decision reports, and other artifacts linked to this run.
               </CardDescription>
             </CardHeader>
             <CardContent className="stack">
-              <div className="code-grid">
-                <JsonViewer value={{ artifacts: artifactsQuery.data ?? [] }} />
-                <JsonViewer value={{ messages: messagesQuery.data ?? [] }} />
-              </div>
+              <JsonViewer value={{ artifacts: artifactsQuery.data ?? [] }} />
             </CardContent>
           </Card>
 

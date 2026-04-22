@@ -489,27 +489,6 @@ describe('real mode API client', () => {
     });
   });
 
-  /* ─── getRunMessages ─── */
-
-  describe('getRunMessages', () => {
-    it('calls GET /api/proxy/control-plane/runs/:id/messages and returns array', async () => {
-      const messages = [
-        { from: 'agent-a', to: ['agent-b'], messageType: 'Proposal', payload: { value: 1 } },
-        { from: 'agent-b', to: ['agent-a'], messageType: 'Evaluation', payload: { approved: true } }
-      ];
-      mocker.on('GET', `/api/proxy/control-plane/runs/${RUN_ID_1}/messages`, () => ({
-        status: 200,
-        body: messages
-      }));
-
-      const { getRunMessages } = await import('@/lib/api/client');
-      const result = await getRunMessages(RUN_ID_1, REAL);
-
-      expect(result).toHaveLength(2);
-      expect(result[0]).toHaveProperty('messageType', 'Proposal');
-    });
-  });
-
   /* ─── getObservabilityRawMetrics ─── */
 
   describe('getObservabilityRawMetrics', () => {

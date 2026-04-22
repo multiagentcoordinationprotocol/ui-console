@@ -1,6 +1,5 @@
 export type RunStatus = 'queued' | 'starting' | 'binding_session' | 'running' | 'completed' | 'failed' | 'cancelled';
 
-export type ExecutionMode = 'live' | 'replay' | 'sandbox';
 export type SessionState =
   | 'SESSION_STATE_UNSPECIFIED'
   | 'SESSION_STATE_OPEN'
@@ -183,40 +182,29 @@ export interface ParticipantBinding {
   agentRef: string;
 }
 
-export interface ExecutionRequest {
-  mode: ExecutionMode;
+/**
+ * Scenario-agnostic run descriptor — the sole wire contract accepted by the
+ * control-plane's `POST /runs` and `POST /runs/validate` (whitelisted via
+ * `forbidNonWhitelisted: true`). Mirrors `examples-service/src/contracts/
+ * run-descriptor.ts`. Participants are bare `{id}` objects: identity is
+ * enforced by the runtime via auth tokens, not derived from this list.
+ */
+export interface RunDescriptor {
+  mode: 'live' | 'sandbox';
   runtime: {
     kind: string;
     version?: string;
   };
   session: {
+    sessionId?: string;
     modeName: string;
     modeVersion: string;
     configurationVersion: string;
     policyVersion?: string;
-    policyHints?: PolicyHints;
     ttlMs: number;
-    initiatorParticipantId?: string;
-    participants: Array<{
-      id: string;
-      role?: string;
-      transportIdentity?: string;
-      metadata?: Record<string, unknown>;
-    }>;
-    roots?: Array<{ uri: string; name?: string }>;
-    context?: Record<string, unknown>;
-    contextEnvelope?: Record<string, unknown>;
+    participants: Array<{ id: string }>;
     metadata?: Record<string, unknown>;
   };
-  kickoff?: Array<{
-    from: string;
-    to: string[];
-    kind: 'request' | 'broadcast' | 'proposal' | 'context';
-    messageType: string;
-    payload?: Record<string, unknown>;
-    payloadEnvelope?: Record<string, unknown>;
-    metadata?: Record<string, unknown>;
-  }>;
   execution?: {
     idempotencyKey?: string;
     tags?: string[];
@@ -227,8 +215,50 @@ export interface ExecutionRequest {
   };
 }
 
+/**
+ * Initiator-side payload returned by `POST /launch/compile`. Present iff the
+ * scenario has a kickoff and an identifiable initiator. The SDK reads this
+ * from the bootstrap and emits `SessionStart` + (optionally) `kickoff` on
+ * `participant.run()` entry.
+ */
+export interface InitiatorPayload {
+  participantId: string;
+  sessionStart: {
+    intent: string;
+    participants: string[];
+    ttlMs: number;
+    modeVersion: string;
+    configurationVersion: string;
+    policyVersion?: string;
+    context?: Record<string, unknown>;
+    contextId?: string;
+    extensions?: Record<string, unknown>;
+    roots?: Array<{ uri: string; name?: string }>;
+  };
+  kickoff?: {
+    messageType: string;
+    payloadType?: string;
+    payload: Record<string, unknown>;
+  };
+}
+
+/**
+ * Examples-service internal scenario metadata. Not part of the CP-1 wire
+ * contract — fields here are consumed by the hosting flow when threading
+ * policy + context into each agent's bootstrap.
+ */
+export interface ScenarioMeta {
+  policyHints?: PolicyHints;
+  sessionContext?: Record<string, unknown>;
+  initiatorParticipantId?: string;
+}
+
 export interface CompileLaunchResult {
-  executionRequest: ExecutionRequest;
+  runDescriptor: RunDescriptor;
+  initiator?: InitiatorPayload;
+  sessionId: string;
+  mode: 'live' | 'sandbox';
+  scenarioMeta: ScenarioMeta;
   display: {
     title: string;
     scenarioRef: string;
@@ -271,6 +301,13 @@ export interface DashboardRunSummary {
 
 export interface CreateRunResponse {
   runId: string;
+  /**
+   * CP now returns the runtime sessionId alongside runId. In the
+   * observer-only model `sessionId === runId` for auto-discovered
+   * sessions, but the field is declared separately so callers can
+   * treat them as distinct when talking to the runtime.
+   */
+  sessionId?: string;
   status: RunStatus;
   traceId?: string;
 }
@@ -300,24 +337,52 @@ export interface CanonicalEvent {
 }
 
 /**
- * BE §3.3 (re-scoped) — `llm.call.completed` event payload.
+ * `llm.call.completed` canonical event payload, as emitted by the
+ * Control Plane. CP normalizes these from agent envelope metadata
+ * (`llmCall` / `tokenUsage` / nested `metadata`) into a flat shape.
  *
- * Synthesized by the Control Plane from message metadata (`llmCall` or
- * `tokenUsage`). Content is inline (subject to `RedactionService`
- * applied in the normalizer); `artifactId` is present when an agent
- * pre-pinned a context artifact.
+ * `participantId` is carried on `event.subject.id` at wire level —
+ * it's kept here as optional so consumers can copy it onto the data
+ * object for convenience.
  */
 export interface LlmCallCompletedData {
-  participantId: string;
   model: string;
   promptTokens: number;
   completionTokens: number;
-  latencyMs: number;
-  prompt?: string;
-  redactedPrompt?: string;
-  response?: string;
-  contextRef?: { artifactId?: string; uri?: string };
-  resultingEventIds?: string[];
+  totalTokens: number;
+  latencyMs?: number;
+  provider?: string;
+  prompt?: unknown;
+  response?: unknown;
+  estimatedCostUsd?: number;
+  artifactId?: string;
+  participantId?: string;
+}
+
+/** Entry inside `RunStateProjection.llm.calls[]`. */
+export interface LlmCallEntry {
+  participantId: string;
+  model?: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  latencyMs?: number;
+  ts: string;
+  messageId?: string;
+  artifactId?: string;
+  estimatedCostUsd?: number;
+}
+
+/** Aggregate `llm` block on `RunStateProjection`. */
+export interface LlmProjection {
+  calls: LlmCallEntry[];
+  totals: {
+    callCount: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    estimatedCostUsd: number;
+  };
 }
 
 export interface Artifact {
@@ -365,6 +430,8 @@ export interface RunStateProjection {
     endedAt?: string;
     traceId?: string;
     modeName?: string;
+    contextId?: string;
+    extensionKeys?: string[];
   };
   participants: Array<{
     participantId: string;
@@ -441,6 +508,12 @@ export interface RunStateProjection {
     accepted: number;
     rejected: number;
   };
+  /**
+   * CP-computed aggregate of LLM calls attached to messages on this
+   * run. `calls` is capped at the 100 most recent; `totals` covers
+   * the entire run. Optional because older CP builds omit the field.
+   */
+  llm?: LlmProjection;
 }
 
 export interface ReplayDescriptor {
@@ -577,7 +650,7 @@ export interface AgentProfile {
   bootstrapMode?: string;
   tags?: string[];
   scenarios: string[];
-  metrics: {
+  metrics?: {
     runs: number;
     signals: number;
     averageLatencyMs?: number;
@@ -620,16 +693,7 @@ export interface CircuitBreakerResult {
 export interface RunExampleResult {
   compiled: CompileLaunchResult;
   hostedAgents: Array<Record<string, unknown>>;
-  controlPlane: {
-    baseUrl: string;
-    validated: boolean;
-    submitted: boolean;
-    runId: string;
-    status: string;
-    traceId: string;
-    policyRegistered?: boolean;
-    policyVersion?: string;
-  };
+  sessionId?: string;
 }
 
 export interface CreateArtifactResult {

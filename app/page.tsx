@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, Inbox, Play } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LineChartCard } from '@/components/charts/line-chart-card';
 import { BarChartCard } from '@/components/charts/bar-chart-card';
 import { RunsTable } from '@/components/runs/runs-table';
@@ -79,6 +80,20 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {kpis.totalRuns === 0 && (
+        <EmptyState
+          icon={<Inbox size={20} />}
+          title="Welcome to MACP Console"
+          description="No runs recorded yet. Launch a scenario from the catalog to see execution data, charts, and analytics here."
+          action={
+            <Link href="/runs/new" className="button button-primary">
+              <Play size={16} />
+              Launch your first scenario
+            </Link>
+          }
+        />
+      )}
+
       <div className="grid-4">
         <Card>
           <CardContent className="kpi-card">
@@ -104,8 +119,10 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="kpi-card">
             <div className="kpi-label">Total cost</div>
-            <div className="kpi-value">{formatCurrency(kpis.totalCostUsd)}</div>
-            <div className="kpi-meta">{formatNumber(kpis.totalTokens)} tokens processed</div>
+            <div className="kpi-value">{kpis.totalCostUsd > 0 ? formatCurrency(kpis.totalCostUsd) : '—'}</div>
+            <div className="kpi-meta">
+              {kpis.totalTokens > 0 ? `${formatNumber(kpis.totalTokens)} tokens processed` : 'No token data'}
+            </div>
           </CardContent>
         </Card>
       </div>

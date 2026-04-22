@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bot } from 'lucide-react';
+import { Bot, Inbox } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { AgentCard } from '@/components/agents/agent-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/field';
@@ -119,6 +120,17 @@ export default function AgentsPage() {
         </div>
       </div>
       <div className="grid-2">
+        {filtered.length === 0 && (
+          <EmptyState
+            icon={<Inbox size={20} />}
+            title="No agents found"
+            description={
+              search || framework !== 'all'
+                ? 'No agents match the current filters. Try adjusting your search or framework selection.'
+                : 'No agents registered. Agents are discovered from scenario definitions in connected packs.'
+            }
+          />
+        )}
         {filtered.map((agent) => (
           <AgentCard key={agent.agentRef} agent={agent} />
         ))}

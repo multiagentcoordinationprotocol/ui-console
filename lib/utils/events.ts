@@ -155,13 +155,21 @@ export function summarizeEvent(event: CanonicalEvent): string {
 
     case 'llm.call.completed': {
       const model = pick(data, 'model') ?? 'model';
-      const participantId = pick(data, 'participantId') ?? '';
+      // participantId is carried on `event.subject.id` at wire level;
+      // fall back to data for scenarios that copy it through.
+      const participantId = event.subject?.id ?? pick(data, 'participantId') ?? '';
       const promptTokens = typeof data.promptTokens === 'number' ? data.promptTokens : undefined;
       const completionTokens = typeof data.completionTokens === 'number' ? data.completionTokens : undefined;
+      const totalTokens = typeof data.totalTokens === 'number' ? data.totalTokens : undefined;
       const latency = typeof data.latencyMs === 'number' ? `${data.latencyMs}ms` : undefined;
+      const cost = typeof data.estimatedCostUsd === 'number' ? `$${data.estimatedCostUsd.toFixed(4)}` : undefined;
       const tokens =
-        promptTokens !== undefined && completionTokens !== undefined ? `${promptTokens}→${completionTokens}` : '';
-      return [`LLM call`, participantId, model, tokens, latency].filter(Boolean).join(' · ');
+        totalTokens !== undefined
+          ? `Σ${totalTokens}`
+          : promptTokens !== undefined && completionTokens !== undefined
+            ? `${promptTokens}→${completionTokens}`
+            : '';
+      return [`LLM call`, participantId, model, tokens, latency, cost].filter(Boolean).join(' · ');
     }
 
     default: {

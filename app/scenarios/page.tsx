@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { FolderKanban, Play } from 'lucide-react';
+import { FolderKanban, Inbox, Play } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ScenarioCard } from '@/components/scenarios/scenario-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/field';
@@ -92,6 +93,17 @@ export default function ScenariosPage() {
       </Card>
 
       <div className="stack">
+        {filtered.length === 0 && (
+          <EmptyState
+            icon={<Inbox size={20} />}
+            title="No scenarios found"
+            description={
+              search || selectedPack !== 'all'
+                ? 'No scenarios match the current filters. Try adjusting your search or pack selection.'
+                : 'No scenario packs discovered. Connect an Example Service to discover available packs and scenarios.'
+            }
+          />
+        )}
         {filtered.map((entry) => (
           <div key={entry.pack.slug} className="stack">
             <div className="section-header">
