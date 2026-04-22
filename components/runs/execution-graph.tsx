@@ -33,7 +33,9 @@ interface FlowNodeData extends Record<string, unknown> {
 const kindIcons: Record<string, ComponentType<{ size?: number }>> = {
   start: Flag,
   context: Database,
+  proposal: Database,
   agent: Bot,
+  participant: Bot,
   decision: Workflow,
   output: CheckCircle2,
   default: CircleDashed
@@ -86,7 +88,9 @@ const nodeTypes = {
 const kindColumnOrder: Record<string, number> = {
   start: 0,
   context: 1,
+  proposal: 1,
   agent: 2,
+  participant: 2,
   decision: 3,
   output: 4
 };
