@@ -34,6 +34,25 @@ services:
       postgres:
         condition: service_healthy
 
+  auth-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: node dist/index.js
+    environment:
+      PORT: "3200"
+      MACP_AUTH_ISSUER: macp-auth-service
+      MACP_AUTH_AUDIENCE: macp-runtime
+    volumes:
+      - ../auth-service:/app:ro
+    ports:
+      - "3200:3200"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3200/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
   runtime:
     image: ${MACP_RUNTIME_IMAGE:-macp-runtime:latest}
     ports:
@@ -41,7 +60,16 @@ services:
     environment:
       MACP_BIND_ADDR: "[::]:50051"
       MACP_ALLOW_INSECURE: "1"
-      MACP_AUTH_TOKENS_JSON: '{"tokens":[{"token":"tok-cp-observer","sender":"control-plane","can_start_sessions":false,"is_observer":true,"can_manage_mode_registry":false},{"token":"tok-risk","sender":"risk-agent","can_start_sessions":true},{"token":"tok-fraud","sender":"fraud-agent","can_start_sessions":false},{"token":"tok-growth","sender":"growth-agent","can_start_sessions":false},{"token":"tok-compliance","sender":"compliance-agent","can_start_sessions":false}]}'
+      # Static bearer kept so control-plane (tok-cp-observer) still authenticates.
+      # JWT bearer added so spawned agents authenticate with auth-service-minted JWTs.
+      MACP_AUTH_TOKENS_JSON: '{"tokens":[{"token":"tok-cp-observer","sender":"control-plane","can_start_sessions":false,"is_observer":true,"can_manage_mode_registry":false}]}'
+      MACP_AUTH_JWKS_URL: "http://auth-service:3200/.well-known/jwks.json"
+      MACP_AUTH_AUDIENCE: "macp-runtime"
+      MACP_AUTH_ISSUER: "macp-auth-service"
+      MACP_AUTH_JWKS_TTL_SECS: "60"
+    depends_on:
+      auth-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/50051'"]
       interval: 3s
@@ -108,12 +136,16 @@ services:
       MACP_RUNTIME_ADDRESS: "runtime:50051"
       MACP_RUNTIME_TLS: "false"
       MACP_RUNTIME_ALLOW_INSECURE: "true"
-      EXAMPLES_SERVICE_AGENT_TOKENS_JSON: '{"risk-agent":"tok-risk","fraud-agent":"tok-fraud","growth-agent":"tok-growth","compliance-agent":"tok-compliance"}'
+      MACP_AUTH_SERVICE_URL: "http://auth-service:3200"
+      MACP_AUTH_SERVICE_TIMEOUT_MS: "5000"
+      MACP_AUTH_TOKEN_TTL_SECONDS: "3600"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
       AUTH_API_KEYS: ""
       LOG_LEVEL: info
       REGISTRY_CACHE_TTL_MS: "0"
     depends_on:
+      auth-service:
+        condition: service_healthy
       runtime:
         condition: service_healthy
     healthcheck:

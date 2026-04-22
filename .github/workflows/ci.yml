@@ -125,10 +125,17 @@ jobs:
           github.event.inputs.update_visual_baselines != 'true'
         run: npm run test:e2e:visual
 
+      # `continue-on-error: true` is the core fix: Playwright exits with
+      # code 1 for every test that had to write a new baseline (it
+      # reports the initial write as a failed comparison). On the
+      # update_visual_baselines=true path that's the intended outcome,
+      # not a real failure — so we let the step "fail" without failing
+      # the job, and downstream steps see success().
       - name: Regenerate missing visual baselines (manual)
         if: >-
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.update_visual_baselines == 'true'
+        continue-on-error: true
         run: npx playwright test --config playwright.visual.config.ts --update-snapshots=missing
 
       - name: Upload Playwright report
@@ -147,11 +154,11 @@ jobs:
           path: test/e2e/visual/test-results/
           retention-days: 14
 
-      # `always()` is required because the regenerate step above exits
-      # non-zero whenever it writes new snapshots (Playwright reports
-      # "A snapshot doesn't exist ... writing actual" as a failure even
-      # though the PNG is written). Without always(), this upload step
-      # is skipped on the very runs that produce the baselines we want.
+      # `always()` is kept as a safety net: the regenerate step uses
+      # continue-on-error, so this step should already run in the
+      # normal case, but always() ensures the baselines are still
+      # uploaded if the step ever times out or errors in an
+      # unexpected way.
       - name: Upload regenerated baselines (manual runs only)
         if: >-
           always() &&
