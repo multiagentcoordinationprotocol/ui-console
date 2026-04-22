@@ -18,10 +18,11 @@ import { formatDateTime, formatNumber, formatPercent, titleCase } from '@/lib/ut
 function matchEventToNode(event: CanonicalEvent, nodeId: string) {
   if (event.subject?.id === nodeId) return true;
   if (event.subject?.kind === 'participant' && event.subject.id === nodeId) return true;
+  const sender = String(event.data.sender ?? '');
   const participantId = String(event.data.participantId ?? event.data.participant ?? '');
   const from = String(event.data.from ?? '');
   const to = Array.isArray(event.data.to) ? event.data.to.map(String) : [];
-  return participantId === nodeId || from === nodeId || to.includes(nodeId);
+  return sender === nodeId || participantId === nodeId || from === nodeId || to.includes(nodeId);
 }
 
 export function NodeInspector({

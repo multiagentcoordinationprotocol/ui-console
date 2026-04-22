@@ -10,6 +10,7 @@ import { useConfirmation } from '@/lib/hooks/use-confirmation';
 import { useToast } from '@/components/ui/toast';
 import { ExecutionGraph } from '@/components/runs/execution-graph';
 import { LiveEventFeed } from '@/components/runs/live-event-feed';
+import { RunStoryPanel } from '@/components/runs/run-story-panel';
 import { NodeInspector } from '@/components/runs/node-inspector';
 import { DecisionPanel } from '@/components/runs/decision-panel';
 import { PolicyPanel } from '@/components/runs/policy-panel';
@@ -397,211 +398,204 @@ export function RunWorkbench({ runId, liveMode = false }: { runId: string; liveM
         <SignalRail state={projectedState} runId={runId} />
       </div>
 
-      <div className="split-layout">
-        <div className="panel-stack">
-          <DecisionPanel run={run} state={projectedState} events={projectedEvents} runId={runId} />
-          {projectedState.policy && (
-            <PolicyPanel
-              policy={projectedState.policy}
-              policyHints={run.metadata?.policyHints as import('@/lib/types').PolicyHints | undefined}
-            />
-          )}
-          <Card>
-            <CardHeader>
-              <CardTitle>Run observability summary</CardTitle>
-              <CardDescription>
-                Aggregate runtime telemetry, session lifecycle, and linked trace coverage for this run.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="stack">
-              <div className="metric-strip">
-                {observabilitySummary.map((item) => (
-                  <div key={item.label} className="metric-box">
-                    <div className="muted small">{item.label}</div>
-                    <div className="metric-box-value">{item.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="list-item">
-                <div className="list-item-title">Runtime session</div>
-                <div className="list-item-meta">
-                  {projectedState.run.runtimeSessionId ?? '—'} · started{' '}
-                  {formatDateTime(run.startedAt ?? run.createdAt)} · elapsed {formatRelativeDuration(runtimeDurationMs)}
-                </div>
-              </div>
-              <JsonViewer value={{ metrics: metricsQuery.data, traces: tracesQuery.data }} />
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="panel-stack">
-          {!liveMode && replayFrames.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Replay preview</CardTitle>
-                <CardDescription>
-                  Step through captured frame snapshots and watch the workbench rewind to earlier states.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TimelineScrubber frames={replayFrames} currentSeq={replaySeq} onSeqChange={setReplaySeq} />
-              </CardContent>
-            </Card>
-          ) : null}
-          <Card>
-            <CardHeader>
-              <CardTitle>Artifacts</CardTitle>
-              <CardDescription>
-                Trace bundles, decision reports, and other artifacts linked to this run.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="stack">
-              <JsonViewer value={{ artifacts: artifactsQuery.data ?? [] }} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Replay and diagnostics</CardTitle>
-              <CardDescription>
-                Request a replay descriptor from the control plane and inspect generated stream metadata.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="stack">
-              <div className="section-actions">
-                <Button variant="secondary" onClick={() => replayMutation.mutate()} disabled={replayMutation.isPending}>
-                  <RefreshCw size={16} />
-                  {replayMutation.isPending ? 'Preparing replay...' : 'Request replay descriptor'}
-                </Button>
-                <Button variant="secondary" onClick={() => setShowExportOptions(!showExportOptions)}>
-                  <Download size={16} />
-                  Export bundle
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => rebuildMutation.mutate()}
-                  disabled={rebuildMutation.isPending}
-                >
-                  <Database size={16} />
-                  {rebuildMutation.isPending ? 'Rebuilding...' : 'Rebuild projection'}
-                </Button>
-                {['completed', 'failed', 'cancelled'].includes(run.status) && (
-                  <Button
-                    variant="danger"
-                    onClick={async () => {
-                      const confirmed = await confirmation.confirm({
-                        title: 'Delete run permanently',
-                        description: `Permanently delete run ${runId.slice(0, 8)}...? This action cannot be undone.`,
-                        confirmLabel: 'Delete'
-                      });
-                      if (confirmed) deleteMutation.mutate();
-                    }}
-                    disabled={deleteMutation.isPending}
-                    aria-label="Permanently delete this run"
-                  >
-                    <Trash2 size={16} />
-                    {deleteMutation.isPending ? 'Deleting...' : 'Permanent delete'}
-                  </Button>
-                )}
-                <Button variant="secondary" onClick={() => setShowCloneForm(!showCloneForm)}>
-                  <Copy size={16} />
-                  Clone run
-                </Button>
-                <Link href="/runs" className="button button-ghost">
-                  Open run history
-                </Link>
-              </div>
-              {showExportOptions && (
-                <Card>
-                  <CardContent className="stack" style={{ padding: '1rem' }}>
-                    <div className="field-grid">
-                      <label className="switch-row">
-                        <input
-                          type="checkbox"
-                          checked={exportIncludeCanonical}
-                          onChange={(e) => setExportIncludeCanonical(e.target.checked)}
-                        />
-                        <span>Include canonical events</span>
-                      </label>
-                      <label className="switch-row">
-                        <input
-                          type="checkbox"
-                          checked={exportIncludeRaw}
-                          onChange={(e) => setExportIncludeRaw(e.target.checked)}
-                        />
-                        <span>Include raw events</span>
-                      </label>
-                    </div>
-                    <div className="field-grid">
-                      <div>
-                        <FieldLabel>Event limit</FieldLabel>
-                        <Input
-                          type="number"
-                          value={String(exportEventLimit)}
-                          min={1}
-                          max={50000}
-                          onChange={(e) => setExportEventLimit(Number(e.target.value) || 10000)}
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>Format</FieldLabel>
-                        <Select
-                          value={exportFormat}
-                          onChange={(e) => setExportFormat(e.target.value as 'json' | 'jsonl')}
-                        >
-                          <option value="json">JSON</option>
-                          <option value="jsonl">JSONL (newline-delimited)</option>
-                        </Select>
-                      </div>
-                    </div>
-                    <Button
-                      variant="primary"
-                      onClick={() => exportMutation.mutate()}
-                      disabled={exportMutation.isPending}
-                    >
-                      <Download size={16} />
-                      {exportMutation.isPending ? 'Exporting...' : 'Download'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-              {showCloneForm && (
-                <Card>
-                  <CardContent className="stack" style={{ padding: '1rem' }}>
-                    <div>
-                      <FieldLabel>Override tags (comma-separated)</FieldLabel>
-                      <Input
-                        value={cloneTagsText}
-                        onChange={(event) => setCloneTagsText(event.target.value)}
-                        placeholder="clone,experiment-2"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel>Override context (JSON)</FieldLabel>
-                      <Textarea
-                        value={cloneContextText}
-                        onChange={(event) => setCloneContextText(event.target.value)}
-                      />
-                    </div>
-                    <Button variant="primary" onClick={() => cloneMutation.mutate()} disabled={cloneMutation.isPending}>
-                      <Copy size={16} />
-                      {cloneMutation.isPending ? 'Cloning...' : 'Clone with overrides'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-              {replayDescriptorJson ? (
-                <JsonViewer value={replayDescriptorJson} />
-              ) : (
-                <div className="empty-state compact">
-                  <h4>No replay requested yet</h4>
-                  <p>Generate a replay descriptor to inspect stream URLs and time-window controls.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      {/* Row 1: Run story + Final decision (side by side) */}
+      <div className="grid-2">
+        <ErrorBoundary>
+          <RunStoryPanel run={run} state={projectedState} events={projectedEvents} metrics={metricsQuery.data} />
+        </ErrorBoundary>
+        <DecisionPanel run={run} state={projectedState} events={projectedEvents} runId={runId} />
       </div>
+
+      {!liveMode && replayFrames.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Replay preview</CardTitle>
+            <CardDescription>
+              Step through captured frame snapshots and watch the workbench rewind to earlier states.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TimelineScrubber frames={replayFrames} currentSeq={replaySeq} onSeqChange={setReplaySeq} />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Row 2: Policy governance + Artifacts + Replay and diagnostics (3 across) */}
+      <div className="grid-3">
+        {projectedState.policy && (
+          <PolicyPanel
+            policy={projectedState.policy}
+            policyHints={run.metadata?.policyHints as import('@/lib/types').PolicyHints | undefined}
+          />
+        )}
+        <Card>
+          <CardHeader>
+            <CardTitle>Artifacts</CardTitle>
+            <CardDescription>Trace bundles, decision reports, and other artifacts linked to this run.</CardDescription>
+          </CardHeader>
+          <CardContent className="stack">
+            <JsonViewer value={{ artifacts: artifactsQuery.data ?? [] }} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Replay and diagnostics</CardTitle>
+            <CardDescription>
+              Request a replay descriptor from the control plane and inspect generated stream metadata.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="stack">
+            <div className="section-actions">
+              <Button variant="secondary" onClick={() => replayMutation.mutate()} disabled={replayMutation.isPending}>
+                <RefreshCw size={16} />
+                {replayMutation.isPending ? 'Preparing replay...' : 'Request replay descriptor'}
+              </Button>
+              <Button variant="secondary" onClick={() => setShowExportOptions(!showExportOptions)}>
+                <Download size={16} />
+                Export bundle
+              </Button>
+              <Button variant="secondary" onClick={() => rebuildMutation.mutate()} disabled={rebuildMutation.isPending}>
+                <Database size={16} />
+                {rebuildMutation.isPending ? 'Rebuilding...' : 'Rebuild projection'}
+              </Button>
+              {['completed', 'failed', 'cancelled'].includes(run.status) && (
+                <Button
+                  variant="danger"
+                  onClick={async () => {
+                    const confirmed = await confirmation.confirm({
+                      title: 'Delete run permanently',
+                      description: `Permanently delete run ${runId.slice(0, 8)}...? This action cannot be undone.`,
+                      confirmLabel: 'Delete'
+                    });
+                    if (confirmed) deleteMutation.mutate();
+                  }}
+                  disabled={deleteMutation.isPending}
+                  aria-label="Permanently delete this run"
+                >
+                  <Trash2 size={16} />
+                  {deleteMutation.isPending ? 'Deleting...' : 'Permanent delete'}
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setShowCloneForm(!showCloneForm)}>
+                <Copy size={16} />
+                Clone run
+              </Button>
+              <Link href="/runs" className="button button-ghost">
+                Open run history
+              </Link>
+            </div>
+            {showExportOptions && (
+              <Card>
+                <CardContent className="stack" style={{ padding: '1rem' }}>
+                  <div className="field-grid">
+                    <label className="switch-row">
+                      <input
+                        type="checkbox"
+                        checked={exportIncludeCanonical}
+                        onChange={(e) => setExportIncludeCanonical(e.target.checked)}
+                      />
+                      <span>Include canonical events</span>
+                    </label>
+                    <label className="switch-row">
+                      <input
+                        type="checkbox"
+                        checked={exportIncludeRaw}
+                        onChange={(e) => setExportIncludeRaw(e.target.checked)}
+                      />
+                      <span>Include raw events</span>
+                    </label>
+                  </div>
+                  <div className="field-grid">
+                    <div>
+                      <FieldLabel>Event limit</FieldLabel>
+                      <Input
+                        type="number"
+                        value={String(exportEventLimit)}
+                        min={1}
+                        max={50000}
+                        onChange={(e) => setExportEventLimit(Number(e.target.value) || 10000)}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>Format</FieldLabel>
+                      <Select
+                        value={exportFormat}
+                        onChange={(e) => setExportFormat(e.target.value as 'json' | 'jsonl')}
+                      >
+                        <option value="json">JSON</option>
+                        <option value="jsonl">JSONL (newline-delimited)</option>
+                      </Select>
+                    </div>
+                  </div>
+                  <Button variant="primary" onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
+                    <Download size={16} />
+                    {exportMutation.isPending ? 'Exporting...' : 'Download'}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            {showCloneForm && (
+              <Card>
+                <CardContent className="stack" style={{ padding: '1rem' }}>
+                  <div>
+                    <FieldLabel>Override tags (comma-separated)</FieldLabel>
+                    <Input
+                      value={cloneTagsText}
+                      onChange={(event) => setCloneTagsText(event.target.value)}
+                      placeholder="clone,experiment-2"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Override context (JSON)</FieldLabel>
+                    <Textarea value={cloneContextText} onChange={(event) => setCloneContextText(event.target.value)} />
+                  </div>
+                  <Button variant="primary" onClick={() => cloneMutation.mutate()} disabled={cloneMutation.isPending}>
+                    <Copy size={16} />
+                    {cloneMutation.isPending ? 'Cloning...' : 'Clone with overrides'}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            {replayDescriptorJson ? (
+              <JsonViewer value={replayDescriptorJson} />
+            ) : (
+              <div className="empty-state compact">
+                <h4>No replay requested yet</h4>
+                <p>Generate a replay descriptor to inspect stream URLs and time-window controls.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 3: Run observability summary (full width) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Run observability summary</CardTitle>
+          <CardDescription>
+            Aggregate runtime telemetry, session lifecycle, and linked trace coverage for this run.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="stack">
+          <div className="metric-strip">
+            {observabilitySummary.map((item) => (
+              <div key={item.label} className="metric-box">
+                <div className="muted small">{item.label}</div>
+                <div className="metric-box-value">{item.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="list-item">
+            <div className="list-item-title">Runtime session</div>
+            <div className="list-item-meta">
+              {projectedState.run.runtimeSessionId ?? '—'} · started {formatDateTime(run.startedAt ?? run.createdAt)} ·
+              elapsed {formatRelativeDuration(runtimeDurationMs)}
+            </div>
+          </div>
+          <JsonViewer value={{ metrics: metricsQuery.data, traces: tracesQuery.data }} />
+        </CardContent>
+      </Card>
       <ConfirmationDialog
         open={confirmation.state.open}
         title={confirmation.state.title}

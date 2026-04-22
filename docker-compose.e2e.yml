@@ -27,6 +27,9 @@ services:
     build:
       context: ../control-plane
       dockerfile: Dockerfile
+      args:
+        NODE_AUTH_TOKEN: ${NODE_AUTH_TOKEN:-}
+        NPM_TOKEN: ${NODE_AUTH_TOKEN:-}
     command: node dist/db/migrate.js
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/macp_e2e
@@ -81,6 +84,9 @@ services:
     build:
       context: ../control-plane
       dockerfile: Dockerfile
+      args:
+        NODE_AUTH_TOKEN: ${NODE_AUTH_TOKEN:-}
+        NPM_TOKEN: ${NODE_AUTH_TOKEN:-}
     ports:
       - "3001:3001"
     environment:
@@ -125,6 +131,8 @@ services:
     build:
       context: ../examples-service
       dockerfile: Dockerfile
+      args:
+        NODE_AUTH_TOKEN: ${NODE_AUTH_TOKEN:-}
     ports:
       - "3100:3000"
     environment:
