@@ -73,7 +73,7 @@ function NewRunPageContent() {
 
   useEffect(() => {
     if (!catalogQuery.data?.length) return;
-     
+
     if (!packSlug) setPackSlug(catalogQuery.data[0].pack.slug);
   }, [catalogQuery.data, packSlug]);
 
@@ -87,7 +87,6 @@ function NewRunPageContent() {
     [scenarioSlug, scenariosForPack]
   );
 
-   
   useEffect(() => {
     if (!selectedScenario) return;
     if (!scenarioSlug || !scenariosForPack.some((scenario) => scenario.scenario === scenarioSlug)) {
@@ -96,7 +95,6 @@ function NewRunPageContent() {
     if (!version) setVersion(selectedScenario.versions[0] ?? '1.0.0');
     if (!templateId) setTemplateId(selectedScenario.templates[0] ?? 'default');
   }, [scenarioSlug, scenariosForPack, selectedScenario, templateId, version]);
-   
 
   const schemaQuery = useQuery({
     queryKey: ['launch-schema', packSlug, selectedScenario?.scenario, version, templateId, demoMode],
@@ -106,7 +104,7 @@ function NewRunPageContent() {
 
   useEffect(() => {
     if (!schemaQuery.data) return;
-     
+
     setFormValues(schemaQuery.data.defaults ?? {});
     setJsonText(JSON.stringify(schemaQuery.data.defaults ?? {}, null, 2));
   }, [schemaQuery.data]);
