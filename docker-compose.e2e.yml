@@ -100,6 +100,13 @@ services:
       RUNTIME_ADDRESS: runtime:50051
       RUNTIME_TLS: "false"
       RUNTIME_ALLOW_INSECURE: "true"
+      # JWT mode (preferred): the credential resolver mints a short-lived
+      # JWT for sender=control-plane via auth-service. RUNTIME_BEARER_TOKEN
+      # remains as a fallback for the rare case auth-service is unreachable.
+      MACP_AUTH_SERVICE_URL: "http://auth-service:3200"
+      MACP_AUTH_SERVICE_TIMEOUT_MS: "5000"
+      MACP_AUTH_TOKEN_TTL_SECONDS: "3600"
+      MACP_AUTH_TOKEN_SENDER: "control-plane"
       RUNTIME_BEARER_TOKEN: "tok-cp-observer"
       AUTH_API_KEYS: ""
       SESSION_DISCOVERY_ENABLED: "true"
@@ -119,6 +126,8 @@ services:
       migrate:
         condition: service_completed_successfully
       runtime:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
     healthcheck:
       test: >-
