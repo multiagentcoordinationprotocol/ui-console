@@ -1,207 +1,226 @@
 export function ScenarioPackDiagram() {
   return (
     <svg
-      viewBox="0 0 860 360"
+      viewBox="0 0 640 340"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-labelledby="pack-diagram-title pack-diagram-desc"
+      aria-labelledby="pack-title pack-desc"
       className="docs-diagram"
     >
-      <title id="pack-diagram-title">Scenario Pack Compilation Pipeline</title>
-      <desc id="pack-diagram-desc">
-        A pack contains versioned scenarios. Each scenario produces a launch schema; compiling with user inputs emits
-        twin artifacts: a scenario-agnostic RunDescriptor sent to the Control Plane and a bootstrap + scenarioSpec
-        handed to the spawned agents.
+      <title id="pack-title">Scenario pack compilation pipeline</title>
+      <desc id="pack-desc">
+        A pack contains versioned scenarios. The Examples Service compiles user inputs into twin artifacts: a
+        scenario-agnostic RunDescriptor for the Control Plane, and a bootstrap plus scenarioSpec for the spawned agents.
       </desc>
 
       <defs>
-        <linearGradient id="pack-panel-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--panel)" stopOpacity="0.96" />
-          <stop offset="100%" stopColor="var(--bg)" stopOpacity="0.96" />
+        <linearGradient id="pack-node" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--panel)" />
+          <stop offset="100%" stopColor="var(--panel-2)" />
         </linearGradient>
-        <marker
-          id="pack-arrow"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
+        <linearGradient id="pack-compile" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="var(--brand-2)" stopOpacity="0.14" />
+        </linearGradient>
+        <marker id="pack-tip" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--muted)" />
+        </marker>
+        <marker id="pack-tip-brand" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--brand)" />
         </marker>
         <marker
-          id="pack-arrow-brand"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
+          id="pack-tip-brand-2"
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brand)" />
-        </marker>
-        <marker
-          id="pack-arrow-brand-2"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brand-2)" />
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--brand-2)" />
         </marker>
       </defs>
 
-      {/* Step 1: Pack */}
-      <g transform="translate(20, 40)">
-        <rect width="120" height="80" rx="18" fill="url(#pack-panel-fill)" stroke="var(--border)" strokeWidth="1" />
-        <rect width="5" height="80" rx="2" fill="var(--brand)" />
-        <text x="60" y="36" textAnchor="middle" className="docs-diagram-title">
+      {/* Row 1: Pack → Scenario → Schema → Compile */}
+      <g>
+        <rect x="20" y="40" width="110" height="56" rx="12" fill="url(#pack-node)" stroke="var(--border)" />
+        <text x="75" y="66" textAnchor="middle" className="docs-diagram-title">
           Pack
         </text>
-        <text x="60" y="56" textAnchor="middle" className="docs-diagram-subtitle">
-          fraud, lending, …
-        </text>
-        <text x="60" y="74" textAnchor="middle" className="docs-diagram-mono">
+        <text x="75" y="84" textAnchor="middle" className="docs-diagram-mono">
           pack.yaml
         </text>
       </g>
 
-      {/* Step 2: Scenario version */}
-      <g transform="translate(170, 40)">
-        <rect width="140" height="80" rx="18" fill="url(#pack-panel-fill)" stroke="var(--border)" strokeWidth="1" />
-        <rect width="5" height="80" rx="2" fill="var(--brand)" />
-        <text x="70" y="36" textAnchor="middle" className="docs-diagram-title">
+      <g>
+        <rect x="150" y="40" width="120" height="56" rx="12" fill="url(#pack-node)" stroke="var(--border)" />
+        <text x="210" y="66" textAnchor="middle" className="docs-diagram-title">
           Scenario
         </text>
-        <text x="70" y="56" textAnchor="middle" className="docs-diagram-mono">
+        <text x="210" y="84" textAnchor="middle" className="docs-diagram-mono">
           @1.0.0
         </text>
-        <text x="70" y="74" textAnchor="middle" className="docs-diagram-subtitle">
-          templates, inputs
-        </text>
       </g>
 
-      {/* Step 3: Launch Schema */}
-      <g transform="translate(340, 40)">
-        <rect width="140" height="80" rx="18" fill="url(#pack-panel-fill)" stroke="var(--border)" strokeWidth="1" />
-        <rect width="5" height="80" rx="2" fill="var(--brand)" />
-        <text x="70" y="36" textAnchor="middle" className="docs-diagram-title">
+      <g>
+        <rect x="290" y="40" width="140" height="56" rx="12" fill="url(#pack-node)" stroke="var(--border)" />
+        <text x="360" y="66" textAnchor="middle" className="docs-diagram-title">
           Launch Schema
         </text>
-        <text x="70" y="56" textAnchor="middle" className="docs-diagram-subtitle">
-          form · defaults ·
-        </text>
-        <text x="70" y="74" textAnchor="middle" className="docs-diagram-subtitle">
-          policyHints
+        <text x="360" y="84" textAnchor="middle" className="docs-diagram-subtitle">
+          inputs · policyHints
         </text>
       </g>
 
-      {/* Step 4: Compile */}
-      <g transform="translate(510, 40)">
-        <rect width="120" height="80" rx="18" fill="url(#pack-panel-fill)" stroke="var(--brand)" strokeWidth="1.5" />
-        <rect width="5" height="80" rx="2" fill="var(--brand)" />
-        <text x="60" y="36" textAnchor="middle" className="docs-diagram-title">
+      <g>
+        <rect
+          x="450"
+          y="40"
+          width="170"
+          height="56"
+          rx="12"
+          fill="url(#pack-compile)"
+          stroke="var(--brand)"
+          strokeOpacity="0.5"
+        />
+        <text x="535" y="66" textAnchor="middle" className="docs-diagram-title">
           Compile
         </text>
-        <text x="60" y="56" textAnchor="middle" className="docs-diagram-mono">
-          POST /launch
-        </text>
-        <text x="60" y="74" textAnchor="middle" className="docs-diagram-mono">
-          /compile
+        <text x="535" y="84" textAnchor="middle" className="docs-diagram-mono">
+          POST /launch/compile
         </text>
       </g>
 
       {/* Arrows between horizontal steps */}
-      <line x1="144" y1="80" x2="166" y2="80" stroke="var(--muted)" strokeWidth="1.25" markerEnd="url(#pack-arrow)" />
-      <line x1="314" y1="80" x2="336" y2="80" stroke="var(--muted)" strokeWidth="1.25" markerEnd="url(#pack-arrow)" />
-      <line x1="484" y1="80" x2="506" y2="80" stroke="var(--muted)" strokeWidth="1.25" markerEnd="url(#pack-arrow)" />
+      <line
+        x1="130"
+        y1="68"
+        x2="150"
+        y2="68"
+        stroke="var(--muted)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+        markerEnd="url(#pack-tip)"
+      />
+      <line
+        x1="270"
+        y1="68"
+        x2="290"
+        y2="68"
+        stroke="var(--muted)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+        markerEnd="url(#pack-tip)"
+      />
+      <line
+        x1="430"
+        y1="68"
+        x2="450"
+        y2="68"
+        stroke="var(--muted)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+        markerEnd="url(#pack-tip)"
+      />
 
-      {/* Split after compile */}
+      {/* Labels for the twin artifacts */}
       <path
-        d="M 630 70 C 680 50, 720 30, 740 40"
+        d="M 470 96 Q 430 150 210 180"
         fill="none"
         stroke="var(--brand)"
-        strokeWidth="1.25"
-        markerEnd="url(#pack-arrow-brand)"
+        strokeOpacity="0.75"
+        strokeWidth="1.1"
+        markerEnd="url(#pack-tip-brand)"
       />
-      <text x="684" y="36" className="docs-diagram-label docs-diagram-label-accent">
+      <text x="330" y="138" textAnchor="middle" className="docs-diagram-label docs-diagram-label-accent">
         RunDescriptor
       </text>
 
       <path
-        d="M 630 90 C 680 110, 720 240, 740 248"
+        d="M 600 96 Q 640 150 430 180"
         fill="none"
         stroke="var(--brand-2)"
-        strokeWidth="1.25"
-        markerEnd="url(#pack-arrow-brand-2)"
+        strokeOpacity="0.7"
+        strokeWidth="1.1"
+        markerEnd="url(#pack-tip-brand-2)"
       />
-      <text x="694" y="180" className="docs-diagram-label docs-diagram-label-accent-2">
-        Bootstrap +
-      </text>
-      <text x="694" y="194" className="docs-diagram-label docs-diagram-label-accent-2">
-        scenarioSpec
+      <text x="540" y="138" textAnchor="middle" className="docs-diagram-label docs-diagram-label-accent-2">
+        Bootstrap + scenarioSpec
       </text>
 
-      {/* Destinations: CP + Agents */}
-      <g transform="translate(740, 20)">
-        <rect width="100" height="60" rx="18" fill="url(#pack-panel-fill)" stroke="var(--brand)" strokeWidth="1.5" />
-        <rect width="5" height="60" rx="2" fill="var(--brand)" />
-        <text x="50" y="30" textAnchor="middle" className="docs-diagram-title">
-          Control
+      {/* Row 2: destinations — Control Plane + Agents */}
+      <g>
+        <rect
+          x="100"
+          y="180"
+          width="220"
+          height="64"
+          rx="14"
+          fill="url(#pack-node)"
+          stroke="var(--brand)"
+          strokeOpacity="0.5"
+        />
+        <circle cx="118" cy="202" r="4" fill="var(--brand)" />
+        <text x="132" y="206" className="docs-diagram-title">
+          Control Plane
         </text>
-        <text x="50" y="48" textAnchor="middle" className="docs-diagram-title">
-          Plane
+        <text x="118" y="226" className="docs-diagram-subtitle">
+          observer-only · creates run record
         </text>
       </g>
 
-      <g transform="translate(740, 230)">
+      <g>
         <rect
-          width="100"
-          height="60"
-          rx="18"
-          fill="url(#pack-panel-fill)"
+          x="340"
+          y="180"
+          width="220"
+          height="64"
+          rx="14"
+          fill="url(#pack-node)"
           stroke="var(--brand-2)"
-          strokeWidth="1.5"
-          strokeDasharray="4 4"
+          strokeOpacity="0.5"
+          strokeDasharray="4 3"
         />
-        <rect width="5" height="60" rx="2" fill="var(--brand-2)" />
-        <text x="50" y="30" textAnchor="middle" className="docs-diagram-title">
+        <circle cx="358" cy="202" r="4" fill="var(--brand-2)" />
+        <text x="372" y="206" className="docs-diagram-title">
           Agents
         </text>
-        <text x="50" y="48" textAnchor="middle" className="docs-diagram-subtitle">
-          spawned
+        <text x="358" y="226" className="docs-diagram-subtitle">
+          spawned · per-agent JWT + gRPC
         </text>
       </g>
 
-      {/* Bottom rail: both feed into Runtime session */}
-      <line x1="790" y1="80" x2="790" y2="180" stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 4" />
-      <line x1="790" y1="230" x2="790" y2="180" stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 4" />
-      <line x1="790" y1="180" x2="150" y2="180" stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 4" />
-
-      <g transform="translate(20, 260)">
-        <rect width="760" height="68" rx="18" fill="url(#pack-panel-fill)" stroke="var(--brand-2)" strokeWidth="1.5" />
-        <rect width="5" height="68" rx="2" fill="var(--brand-2)" />
-        <text x="380" y="32" textAnchor="middle" className="docs-diagram-title">
-          Runtime Session
-        </text>
-        <text x="380" y="54" textAnchor="middle" className="docs-diagram-subtitle">
-          initiator opens SessionStart · Control Plane observes read-only · agents drive envelopes
-        </text>
-      </g>
-
+      {/* Convergence — both lead to Runtime Session */}
       <line
-        x1="150"
-        y1="180"
-        x2="150"
-        y2="258"
+        x1="210"
+        y1="244"
+        x2="210"
+        y2="266"
         stroke="var(--muted)"
-        strokeWidth="1.25"
-        strokeDasharray="3 4"
-        markerEnd="url(#pack-arrow)"
+        strokeOpacity="0.5"
+        strokeWidth="1"
+        strokeDasharray="3 3"
       />
+      <line
+        x1="450"
+        y1="244"
+        x2="450"
+        y2="266"
+        stroke="var(--muted)"
+        strokeOpacity="0.5"
+        strokeWidth="1"
+        strokeDasharray="3 3"
+      />
+
+      <g>
+        <rect x="100" y="266" width="460" height="50" rx="14" fill="url(#pack-node)" stroke="var(--border)" />
+        <text x="330" y="290" textAnchor="middle" className="docs-diagram-title">
+          Runtime session
+        </text>
+        <text x="330" y="306" textAnchor="middle" className="docs-diagram-subtitle">
+          initiator calls SessionStart · CP subscribes read-only · agents drive envelopes
+        </text>
+      </g>
     </svg>
   );
 }

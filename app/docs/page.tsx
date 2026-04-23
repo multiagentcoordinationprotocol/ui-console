@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { BookOpen, Compass, Layers, Play, Rocket, Sparkles, Zap } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArchitectureDiagram } from '@/components/docs/diagrams/architecture-diagram';
 import { ScenarioPackDiagram } from '@/components/docs/diagrams/scenario-pack-diagram';
@@ -85,79 +84,6 @@ export default async function DocsLandingPage() {
           </CardContent>
         </Card>
       </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Getting started</CardTitle>
-          <CardDescription>Two paths. Demo mode is instant; real mode runs the full Docker stack.</CardDescription>
-        </CardHeader>
-        <CardContent className="stack">
-          <div className="docs-quickstart-grid">
-            <div className="panel docs-quickstart-card">
-              <div className="docs-quickstart-head">
-                <Badge label="Recommended for first run" tone="info" />
-                <h3>Demo mode</h3>
-                <p className="muted">No backends. Rich mock dataset covering every surface.</p>
-              </div>
-              <pre className="code">
-                <code>{`cp .env.example .env.local\nnpm install\nnpm run dev\n\n# open http://localhost:3000`}</code>
-              </pre>
-            </div>
-            <div className="panel docs-quickstart-card">
-              <div className="docs-quickstart-head">
-                <Badge label="Full stack" tone="neutral" />
-                <h3>Real mode</h3>
-                <p className="muted">PostgreSQL + Runtime + Control Plane + Examples Service + UI, in Docker.</p>
-              </div>
-              <pre className="code">
-                <code>{`npm run local:up     # start everything\nnpm run local:status # check health\nnpm run local:down   # stop + clean`}</code>
-              </pre>
-            </div>
-          </div>
-          <div className="docs-ports-table">
-            <table className="docs-table">
-              <thead>
-                <tr>
-                  <th>Service</th>
-                  <th>Port</th>
-                  <th>Health</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>PostgreSQL</td>
-                  <td>5434</td>
-                  <td className="muted">—</td>
-                </tr>
-                <tr>
-                  <td>Runtime (gRPC)</td>
-                  <td>50051</td>
-                  <td className="muted">—</td>
-                </tr>
-                <tr>
-                  <td>Control Plane</td>
-                  <td>3001</td>
-                  <td>
-                    <code>/healthz</code>
-                  </td>
-                </tr>
-                <tr>
-                  <td>Examples Service</td>
-                  <td>3100</td>
-                  <td>
-                    <code>/healthz</code>
-                  </td>
-                </tr>
-                <tr>
-                  <td>UI Console</td>
-                  <td>3000</td>
-                  <td className="muted">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

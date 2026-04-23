@@ -1,226 +1,201 @@
 export function ArchitectureDiagram() {
   return (
     <svg
-      viewBox="0 0 720 520"
+      viewBox="0 0 560 460"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-labelledby="arch-diagram-title arch-diagram-desc"
+      aria-labelledby="arch-title arch-desc"
       className="docs-diagram"
     >
-      <title id="arch-diagram-title">MACP UI Console — Architecture</title>
-      <desc id="arch-diagram-desc">
-        Browser calls a Next.js proxy, which forwards to the Examples Service and the Control Plane. The Control Plane
-        observes the Runtime over gRPC. Agents authenticate directly to the Runtime via the SDK, bypassing the Control
-        Plane.
+      <title id="arch-title">UI Console architecture</title>
+      <desc id="arch-desc">
+        The browser calls a Next.js route-handler proxy that forwards to the Examples Service and Control Plane. The
+        Control Plane observes the Runtime read-only; agents authenticate to the Runtime directly via the SDK.
       </desc>
 
       <defs>
-        <linearGradient id="arch-panel-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--panel)" stopOpacity="0.96" />
-          <stop offset="100%" stopColor="var(--bg)" stopOpacity="0.96" />
+        <linearGradient id="arch-node" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--panel)" />
+          <stop offset="100%" stopColor="var(--panel-2)" />
         </linearGradient>
-        <marker
-          id="arch-arrow"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
+        <linearGradient id="arch-accent" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="var(--brand-2)" stopOpacity="0.14" />
+        </linearGradient>
+        <marker id="arch-tip" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--muted)" />
         </marker>
-        <marker
-          id="arch-arrow-brand"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--brand-2)" />
+        <marker id="arch-tip-accent" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--brand-2)" />
         </marker>
       </defs>
 
-      {/* Row 1: Browser */}
+      {/* Browser */}
       <g>
         <rect
-          x="280"
-          y="24"
-          width="160"
-          height="64"
-          rx="18"
-          fill="url(#arch-panel-fill)"
+          x="210"
+          y="20"
+          width="140"
+          height="52"
+          rx="14"
+          fill="url(#arch-accent)"
           stroke="var(--brand)"
-          strokeWidth="1.5"
+          strokeOpacity="0.5"
         />
-        <rect x="280" y="24" width="5" height="64" rx="2" fill="var(--brand)" />
-        <text x="360" y="52" textAnchor="middle" className="docs-diagram-title">
+        <text x="280" y="44" textAnchor="middle" className="docs-diagram-title">
           Browser
         </text>
-        <text x="360" y="72" textAnchor="middle" className="docs-diagram-subtitle">
-          React 19 · App Router
+        <text x="280" y="60" textAnchor="middle" className="docs-diagram-subtitle">
+          React 19 UI
         </text>
       </g>
 
-      {/* Edge: Browser → Proxy */}
-      <line x1="360" y1="88" x2="360" y2="132" stroke="var(--muted)" strokeWidth="1.25" markerEnd="url(#arch-arrow)" />
-      <text x="372" y="114" className="docs-diagram-label">
-        HTTP
-      </text>
+      {/* edge */}
+      <line
+        x1="280"
+        y1="72"
+        x2="280"
+        y2="110"
+        stroke="var(--muted)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+        markerEnd="url(#arch-tip)"
+      />
 
-      {/* Row 2: Proxy */}
+      {/* Proxy */}
       <g>
-        <rect
-          x="200"
-          y="132"
-          width="320"
-          height="68"
-          rx="18"
-          fill="url(#arch-panel-fill)"
-          stroke="var(--border)"
-          strokeWidth="1"
-        />
-        <text x="360" y="160" textAnchor="middle" className="docs-diagram-title">
-          Next.js Route Handler Proxy
+        <rect x="130" y="110" width="300" height="56" rx="14" fill="url(#arch-node)" stroke="var(--border)" />
+        <text x="280" y="134" textAnchor="middle" className="docs-diagram-title">
+          Next.js Route-Handler Proxy
         </text>
-        <text x="360" y="180" textAnchor="middle" className="docs-diagram-mono">
-          /api/proxy/{'{'}example,control-plane{'}'}/…
+        <text x="280" y="152" textAnchor="middle" className="docs-diagram-mono">
+          /api/proxy/{'{'}example,control-plane{'}'}
         </text>
       </g>
 
-      {/* Edges: Proxy → ES, Proxy → CP */}
+      {/* split edges */}
       <path
-        d="M 280 200 C 240 230, 200 240, 170 270"
+        d="M 210 166 Q 160 190 130 210"
         fill="none"
         stroke="var(--muted)"
-        strokeWidth="1.25"
-        markerEnd="url(#arch-arrow)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+        markerEnd="url(#arch-tip)"
       />
       <path
-        d="M 440 200 C 480 230, 520 240, 550 270"
+        d="M 350 166 Q 400 190 430 210"
         fill="none"
         stroke="var(--muted)"
-        strokeWidth="1.25"
-        markerEnd="url(#arch-arrow)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+        markerEnd="url(#arch-tip)"
       />
 
-      {/* Row 3: Examples Service + Control Plane */}
+      {/* Examples Service */}
       <g>
-        <rect
-          x="60"
-          y="272"
-          width="220"
-          height="76"
-          rx="18"
-          fill="url(#arch-panel-fill)"
-          stroke="var(--border)"
-          strokeWidth="1"
-        />
-        <rect x="60" y="272" width="5" height="76" rx="2" fill="var(--brand)" />
-        <text x="170" y="300" textAnchor="middle" className="docs-diagram-title">
+        <rect x="30" y="210" width="200" height="66" rx="14" fill="url(#arch-node)" stroke="var(--border)" />
+        <circle cx="48" cy="232" r="4" fill="var(--brand)" />
+        <text x="62" y="236" className="docs-diagram-title">
           Examples Service
         </text>
-        <text x="170" y="318" textAnchor="middle" className="docs-diagram-subtitle">
+        <text x="48" y="256" className="docs-diagram-subtitle">
           catalog · schema · compile
         </text>
-        <text x="170" y="336" textAnchor="middle" className="docs-diagram-mono">
+        <text x="48" y="270" className="docs-diagram-mono">
           :3000
         </text>
       </g>
 
+      {/* Control Plane */}
       <g>
-        <rect
-          x="440"
-          y="272"
-          width="220"
-          height="76"
-          rx="18"
-          fill="url(#arch-panel-fill)"
-          stroke="var(--border)"
-          strokeWidth="1"
-        />
-        <rect x="440" y="272" width="5" height="76" rx="2" fill="var(--brand)" />
-        <text x="550" y="300" textAnchor="middle" className="docs-diagram-title">
+        <rect x="330" y="210" width="200" height="66" rx="14" fill="url(#arch-node)" stroke="var(--border)" />
+        <circle cx="348" cy="232" r="4" fill="var(--brand)" />
+        <text x="362" y="236" className="docs-diagram-title">
           Control Plane
         </text>
-        <text x="550" y="318" textAnchor="middle" className="docs-diagram-subtitle">
+        <text x="348" y="256" className="docs-diagram-subtitle">
           observer · state · SSE
         </text>
-        <text x="550" y="336" textAnchor="middle" className="docs-diagram-mono">
+        <text x="348" y="270" className="docs-diagram-mono">
           :3001
         </text>
       </g>
 
-      {/* Edge: CP → Runtime (observer gRPC) */}
+      {/* CP → Runtime edge */}
       <path
-        d="M 550 348 C 550 380, 510 400, 470 420"
+        d="M 430 276 Q 430 320 380 340"
         fill="none"
         stroke="var(--muted)"
-        strokeWidth="1.25"
-        markerEnd="url(#arch-arrow)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+        markerEnd="url(#arch-tip)"
       />
-      <text x="548" y="388" className="docs-diagram-label">
-        gRPC · StreamSession
-      </text>
-      <text x="548" y="402" className="docs-diagram-label docs-diagram-label-dim">
-        (read-only observer)
+      <text x="435" y="310" className="docs-diagram-label">
+        gRPC observer
       </text>
 
-      {/* Row 4: Runtime */}
+      {/* Runtime */}
       <g>
         <rect
-          x="280"
-          y="412"
-          width="160"
-          height="68"
-          rx="18"
-          fill="url(#arch-panel-fill)"
+          x="210"
+          y="340"
+          width="140"
+          height="60"
+          rx="14"
+          fill="url(#arch-node)"
           stroke="var(--brand-2)"
-          strokeWidth="1.5"
+          strokeOpacity="0.55"
         />
-        <rect x="280" y="412" width="5" height="68" rx="2" fill="var(--brand-2)" />
-        <text x="360" y="440" textAnchor="middle" className="docs-diagram-title">
+        <circle cx="228" cy="362" r="4" fill="var(--brand-2)" />
+        <text x="242" y="366" className="docs-diagram-title">
           Runtime
         </text>
-        <text x="360" y="460" textAnchor="middle" className="docs-diagram-subtitle">
+        <text x="228" y="386" className="docs-diagram-subtitle">
           Rust · gRPC
         </text>
       </g>
 
-      {/* Agents cluster + dashed edge to Runtime */}
+      {/* Agents */}
       <g>
         <rect
-          x="60"
-          y="412"
-          width="180"
-          height="68"
-          rx="18"
-          fill="url(#arch-panel-fill)"
+          x="30"
+          y="340"
+          width="140"
+          height="60"
+          rx="14"
+          fill="url(#arch-node)"
           stroke="var(--brand-2)"
-          strokeWidth="1.5"
-          strokeDasharray="4 4"
+          strokeOpacity="0.45"
+          strokeDasharray="4 3"
         />
-        <rect x="60" y="412" width="5" height="68" rx="2" fill="var(--brand-2)" />
-        <text x="150" y="440" textAnchor="middle" className="docs-diagram-title">
+        <circle cx="48" cy="362" r="4" fill="var(--brand-2)" />
+        <text x="62" y="366" className="docs-diagram-title">
           Agents
         </text>
-        <text x="150" y="460" textAnchor="middle" className="docs-diagram-subtitle">
-          macp-sdk-{'{'}py,ts{'}'}
+        <text x="48" y="386" className="docs-diagram-subtitle">
+          macp-sdk
         </text>
       </g>
 
-      <path
-        d="M 240 446 L 280 446"
+      {/* agents → runtime dashed */}
+      <line
+        x1="170"
+        y1="370"
+        x2="210"
+        y2="370"
         stroke="var(--brand-2)"
-        strokeWidth="1.5"
-        strokeDasharray="4 4"
-        fill="none"
-        markerEnd="url(#arch-arrow-brand)"
+        strokeOpacity="0.7"
+        strokeWidth="1.2"
+        strokeDasharray="4 3"
+        markerEnd="url(#arch-tip-accent)"
       />
-      <text x="260" y="432" textAnchor="middle" className="docs-diagram-label docs-diagram-label-accent">
+      <text x="190" y="360" textAnchor="middle" className="docs-diagram-label docs-diagram-label-accent">
         direct-agent-auth
+      </text>
+
+      {/* caption */}
+      <text x="280" y="430" textAnchor="middle" className="docs-diagram-caption">
+        Browser talks only to the proxy. Agents talk only to the runtime. CP never calls Send.
       </text>
     </svg>
   );

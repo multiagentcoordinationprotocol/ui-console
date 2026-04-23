@@ -1923,15 +1923,18 @@ pre code {
 }
 
 .docs-diagram-wrap {
-  padding: 12px;
+  padding: 20px 16px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 18px;
+  max-width: 720px;
+  margin: 0 auto;
 }
 .docs-diagram {
   width: 100%;
   height: auto;
   display: block;
+  max-width: 100%;
 }
 .docs-diagram text {
   fill: var(--text);

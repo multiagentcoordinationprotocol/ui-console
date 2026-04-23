@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
-  BookOpen,
   Bot,
   FolderKanban,
   Gauge,
@@ -27,7 +26,6 @@ export interface NavItem {
 
 export const primaryNavItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: Gauge },
-  { href: '/docs', label: 'Docs', icon: BookOpen },
   { href: '/scenarios', label: 'Scenarios', icon: FolderKanban },
   { href: '/runs/live', label: 'Live Runs', icon: Play },
   { href: '/runs', label: 'Run History', icon: History },
