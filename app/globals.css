@@ -1923,18 +1923,27 @@ pre code {
 }
 
 .docs-diagram-wrap {
-  padding: 20px 16px;
+  padding: 28px 24px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 18px;
-  max-width: 720px;
-  margin: 0 auto;
 }
 .docs-diagram {
   width: 100%;
   height: auto;
   display: block;
-  max-width: 100%;
+  min-height: 280px;
+}
+/* Per-diagram aspect hints — give each SVG enough vertical room to feel readable
+   without letting them bloat on very wide screens. */
+.docs-diagram-wrap--arch .docs-diagram {
+  max-height: 560px;
+}
+.docs-diagram-wrap--pack .docs-diagram {
+  max-height: 440px;
+}
+.docs-diagram-wrap--flow .docs-diagram {
+  max-height: 260px;
 }
 .docs-diagram text {
   fill: var(--text);

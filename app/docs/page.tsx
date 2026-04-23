@@ -94,7 +94,7 @@ export default async function DocsLandingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="stack">
-          <div className="docs-diagram-wrap">
+          <div className="docs-diagram-wrap docs-diagram-wrap--arch">
             <ArchitectureDiagram />
           </div>
           <p className="muted">
@@ -116,7 +116,7 @@ export default async function DocsLandingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="stack">
-          <div className="docs-diagram-wrap">
+          <div className="docs-diagram-wrap docs-diagram-wrap--pack">
             <ScenarioPackDiagram />
           </div>
           <ul className="docs-explainer-list">
@@ -151,7 +151,7 @@ export default async function DocsLandingPage() {
           <CardDescription>From clicking Launch to watching a live run — five steps, three services.</CardDescription>
         </CardHeader>
         <CardContent className="stack">
-          <div className="docs-diagram-wrap">
+          <div className="docs-diagram-wrap docs-diagram-wrap--flow">
             <RunFlowDiagram />
           </div>
           <ol className="docs-explainer-list">
