@@ -1,5 +1,67 @@
 # Changelog
 
+## 2026-04-22 — Docs refresh: cross-repo references, reduced duplication
+
+Backend docs (`examples-service`, `control-plane`, `runtime`, `python-sdk`, `typescript-sdk`) were all refreshed upstream. The UI console docs are realigned to **reference** those sources rather than mirror their endpoint tables. No UI code changes.
+
+- `backend-repo-notes.md` rewritten as a pointer index. Per-service endpoint inventories removed; each service now links to its canonical upstream doc plus a short note on the UI-facing role.
+- `api-integration.md` trimmed: endpoint schemas now point to `control-plane/docs/API.md` and `examples-service/docs/api-reference.md`; the UI-specific pieces (proxy, normalizers, SSE hook, demo mode, launch sequences) remain documented inline.
+- `architecture.md` gained an **Upstream services** section linking to each repo's architecture doc (CP, ES, runtime, SDKs). Client line counts resynced.
+- `README.md` gained an **Upstream repositories** table and updated doc index.
+- All occurrences of "Example Service" normalized to the upstream spelling **Examples Service**.
+
+## 2026-04-22 — Observer-only CP alignment, session-interaction rework, Playwright removal
+
+Consolidates a run of UI ↔ backend integration changes (`5adcc20`, `1045a59`, `65433b6`, `fdbe99f`, `6cd9da6`, `4965a63`, `6da8a76`).
+
+### Control Plane contract alignment
+
+- Aligned the client with the **observer-only Control Plane** authority model: agent-originated traffic (messages, signals, context updates) now flows through the runtime SDKs. CP endpoints `POST /runs/:id/messages`, `POST /runs/:id/signal`, and `POST /runs/:id/context` return `410 Gone`. `POST /runs/:id/cancel` proxies to the initiator agent's cancel callback (or calls `CancelSession` directly when policy-delegated).
+- `POST /runs` is the **only** run-creation path and accepts a whitelisted-safe compiled `RunDescriptor` only — CP rejects any body containing `kickoff[]`, `participants[].role`, `commitments[]`, `policyHints`, or `initiatorParticipantId`. The UI continues to compile via Examples Service, which is already whitelisted-safe.
+- `POST /runs/:id/clone` rejects non-empty `context` overrides.
+- `CreateRunResponse` now surfaces `sessionId` alongside `runId` (equal under observer-only; reserved for future auto-discovery).
+- Extended `RunStateProjection` with the `llm` projection: `{ calls[], totals: { callCount, promptTokens, completionTokens, totalTokens, estimatedCostUsd } }` plus `contextId` and `extensionKeys` on the `run` block. `NodeInspector` surfaces the LLM tab from this data.
+
+### Runtime policy registry integration (RFC-MACP-0012 pass-through)
+
+- New client functions: `listRuntimePolicies`, `getRuntimePolicy`, `registerRuntimePolicy`, `unregisterRuntimePolicy` against CP `/runtime/policies{?mode}` and `/runtime/policies/:policyId`.
+- Surface: `/policies` (registry browser) and `/modes` (mode-scoped policy list).
+- `PolicyBadge` and `PolicyPanel` tones updated to reflect the revised governance rules and commitment-evaluation contract.
+- Mock dataset gains `MOCK_RUNTIME_POLICIES` to keep demo mode exercisable.
+
+### Session interaction simplification
+
+- Removed UI-side message/signal/context POST forms that targeted the now-410 CP endpoints. The runs workbench is now a read-only consumer of CP state, canonical events, and artifacts; agents drive envelopes via `macp-sdk-python` / `macp-sdk-typescript`.
+- Artifact creation (`POST /runs/:id/artifacts`) and projection rebuild (`POST /runs/:id/projection/rebuild`) remain CP-local and are kept.
+
+### Dashboard chart series
+
+- CP now emits a **single `decisionOutcome`** series (positive/negative encoded as +1/-1 per bucket) instead of the earlier split `decisionOutcomePositive` / `decisionOutcomeNegative` arrays. Client and mock data updated; any callers relying on the split fields were removed.
+
+### Response normalization cleanup
+
+- `normalizeRun()` no longer synthesizes `archivedAt` from tags — CP exposes the column directly; the client passes it through unchanged.
+- `normalizeEvent()` promoted out of the SSE hook and applied uniformly in `getRunEvents` and `listEvents` so every CP event consumer gets the nested `source` / `subject` shape.
+- `listEvents` gained a session-cached `eventsEndpointMissing` flag — when CP returns `404` for `/events`, the fallback per-run fan-out is used for the rest of the browser session without re-probing.
+
+### Test infrastructure
+
+- **Playwright removed** (`4965a63`) — the visual-regression and E2E spec suites are retired. All golden-PNG baselines deleted. The Vitest + React Testing Library suite remains canonical.
+- Integration tests under `test/integration/` tightened for the observer-only contracts and the new 410 responses (`6da8a76`).
+
+### UI regression fixes
+
+- Color palette and chart/config warning cleanup that regressed during the CP rewrite work (`fdbe99f`).
+- Lint-only fixes across `decision-panel`, `policy-panel`, and `run-workbench` (`6cd9da6`, `ddd8a26`).
+- `ExecutionGraph` regained the four extra auto-layout passes lost in the CP rewrite (part of `6da8a76`).
+
+### Docs
+
+- `api-integration.md`, `backend-repo-notes.md`, and `architecture.md` regenerated against the current `lib/api/client.ts`. Runtime policy endpoints, `/admin/circuit-breaker/history`, `/readyz`, `/runs/:id/replay/state?seq=`, `/runs/batch/export`, and the Jaeger proxy route are now documented.
+- `README.md` route map includes `/modes` and `/policies`; added the `npm run local:{up,down,status}` Docker full-stack section.
+
+---
+
 ## 2026-04-14 (continued) — Phase F + Phase D remainder
 
 Second push on 2026-04-14: completes Phase F (filters + observability) and the

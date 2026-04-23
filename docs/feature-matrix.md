@@ -12,7 +12,7 @@
 | Scenarios | Policy hints | ✅ | Policy type, threshold, veto config on scenario cards and detail |
 | Run creation | Schema-driven launch form | ✅ | Uses launch schema defaults |
 | Run creation | Raw JSON editor | ✅ | Switchable input mode |
-| Run creation | Compile launch request | ✅ | Example Service integration |
+| Run creation | Compile launch request | ✅ | Examples Service integration |
 | Run creation | Validate execution request | ✅ | Control Plane integration |
 | Run creation | Submit run | ✅ | Redirects to live workbench |
 | Run creation | Example end-to-end bootstrap | ✅ | Optional quick path |
@@ -26,8 +26,7 @@
 | Run detail | Final decision panel | ✅ | Action, confidence, rationale |
 | Run detail | Artifacts/messages panel | ✅ | Trace/report bundle visibility |
 | Run detail | Replay descriptor request | ✅ | Control Plane replay hookup |
-| Run detail | Clone with overrides | ✅ | Clone run with custom tags/context |
-| Run detail | Session interaction | ✅ | Send messages and signals to live runs |
+| Run detail | Clone with overrides | ✅ | Clone run with custom tags (context overrides rejected under observer-only CP) |
 | Run detail | Policy governance | ✅ | RFC-MACP-0012 policy panel, commitment evaluations, policy badges |
 | Run detail | Timeline scrubber | ✅ | Interactive visual replay with frame markers |
 | History | Run history page | ✅ | Search + status/environment filtering (server-side) |
@@ -42,8 +41,13 @@
 | Logs | Canonical event explorer | ✅ | Run selection + event filters |
 | Traces | Trace summary and artifact explorer | ✅ | Inline span support when available |
 | Observability | Runtime health dashboard | ✅ | Manifest, modes, roots, metrics text |
-| Observability | Raw metrics surface | ✅ | Prometheus text dump |
-| Observability | Readiness probe | ✅ | Per-subsystem health checks |
+| Observability | Raw metrics surface | ✅ | Prometheus text dump, parsed into sortable table |
+| Observability | Percentile latency KPIs | ✅ | p50 / p95 / p99 computed client-side from histogram buckets |
+| Observability | Circuit breaker timeline | ✅ | State transitions from `/admin/circuit-breaker/history` |
+| Observability | Readiness probe | ✅ | Per-subsystem health checks (`/readyz`) |
+| Observability | Jaeger trace deep-links | ✅ | Span waterfall via `/api/jaeger/*` proxy when configured |
+| Runtime | Runtime mode browser | ✅ | `/modes` surface |
+| Runtime | Runtime policy registry | ✅ | `/policies` surface, RFC-MACP-0012 governance rules |
 | Settings | Preferences store | ✅ | Persisted in local storage |
 | Settings | Webhook management | ✅ | Create/toggle/delete, delivery stats display |
 | Settings | Circuit breaker reset | ✅ | Admin action surface |
@@ -71,5 +75,5 @@
 - annotation / incident-notes layer
 - prompt and policy version diffing
 - RBAC with route guards
-- OTEL trace deep-linking
 - simulation / dry-run mode
+- threshold-based alerting on metric surfaces
