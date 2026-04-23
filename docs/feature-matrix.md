@@ -52,6 +52,7 @@
 | Settings | Webhook management | ✅ | Create/toggle/delete, delivery stats display |
 | Settings | Circuit breaker reset | ✅ | Admin action surface |
 | Settings | Audit log view | ✅ | Recent actions |
+| Platform | Docs viewer | ✅ | `/docs` landing + UI Console + Examples Service doc collections with Mermaid rendering |
 | Platform | Demo mode | ✅ | Rich mock dataset |
 | Platform | Command palette | ✅ | Route jumping |
 | Platform | Theme toggle | ✅ | Dark/light |

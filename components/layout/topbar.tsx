@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Command, Moon, Play, Sun } from 'lucide-react';
+import { BookOpen, Command, Moon, Play, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
@@ -46,6 +46,10 @@ export function Topbar() {
           <Command size={16} />
           Search
         </Button>
+        <Link href="/docs" className="button">
+          <BookOpen size={16} />
+          Docs
+        </Link>
         <Link href="/runs/new" className="button button-primary">
           <Play size={16} />
           New Run

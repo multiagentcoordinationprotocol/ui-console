@@ -129,6 +129,7 @@ Important values:
 ## Route map
 
 - `/` — dashboard
+- `/docs` — docs home (explainer + UI Console and Examples Service doc viewers)
 - `/scenarios` — scenario catalog
 - `/scenarios/[packSlug]/[scenarioSlug]` — scenario detail
 - `/runs/new` — launch run

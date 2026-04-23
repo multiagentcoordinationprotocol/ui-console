@@ -1,0 +1,58 @@
+name: Sync Examples Service Docs
+
+on:
+  # Triggered by the examples-service repo via repository_dispatch
+  repository_dispatch:
+    types: [docs-updated]
+
+  # Manual trigger
+  workflow_dispatch:
+
+  # Fallback: scheduled sync every 6 hours
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout ui-console
+        uses: actions/checkout@v5
+
+      - name: Checkout examples-service
+        uses: actions/checkout@v5
+        with:
+          repository: multiagentcoordinationprotocol/examples-service
+          path: examples-service-repo
+          sparse-checkout: |
+            docs
+            README.md
+
+      - name: Sync docs into docs-content/examples-service
+        run: |
+          chmod +x scripts/sync-examples-docs.sh
+          ./scripts/sync-examples-docs.sh examples-service-repo
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git diff --quiet docs-content/examples-service && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Create PR with updated docs
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'docs: sync examples-service docs'
+          title: 'docs: sync examples-service docs'
+          body: |
+            Automated sync from [multiagentcoordinationprotocol/examples-service](https://github.com/multiagentcoordinationprotocol/examples-service).
+
+            Updates `docs-content/examples-service/` from the upstream `docs/` directory and `README.md`.
+
+            Triggered by: ${{ github.event_name }}
+          branch: automated/sync-examples-docs
+          delete-branch: true
