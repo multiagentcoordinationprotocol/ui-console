@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-04-22 — In-console docs surface + Examples Service docs sync
+
+Moves the UI Console and Examples Service docs out of the marketing website and into the Console app itself at `/docs`. Operators now read the docs next to the product.
+
+### New
+
+- `/docs` — single-page landing with hand-authored themed SVG diagrams (architecture, scenario-pack pipeline, run flow) plus a doc index.
+- `/docs/ui-console/[slug]` — renders this repo's `docs/*.md` via `react-markdown` + `remark-gfm`. Mermaid code fences render as diagrams via a lazy-loaded client component that re-renders on theme change.
+- `/docs/examples-service/[slug]` — renders markdown from `docs-content/examples-service/`, which is synced from the upstream repo.
+- Sidebar gains a **Docs** entry (BookOpen icon, immediately after Dashboard).
+- New sync workflow `.github/workflows/sync-examples-docs.yml` + `scripts/sync-examples-docs.sh`. Listens for `repository_dispatch: docs-updated` from the examples-service repo (plus a 6-hour fallback schedule), copies the docs, and opens an auto-PR.
+- `lib/docs/loader.ts` — small server-side helper (title / first-paragraph extraction).
+- `components/docs/markdown-renderer.tsx` with link rewriting (relative `.md` → `/docs/<collection>/<slug>`, cross-repo paths → GitHub URLs), styled code / tables / blockquotes, and `github-slugger` heading anchors.
+
+### Removed
+
+- `.github/workflows/notify-website.yml` — the console is the docs host now, not a source for the website. Website-side cleanup (removing `app/console/` + `app/examples-service/` + their sync blocks) lands in a separate website commit.
+
+### Dependencies
+
+- Added `react-markdown`, `remark-gfm`, `mermaid`, `github-slugger`.
+
+### Operator note
+
+The examples-service repo's `notify-website.yml` is retargeted at ui-console in a sibling commit. Once that ships, a push to examples-service `main` automatically opens a sync PR here. Merging the PR redeploys the Console with fresh Examples Service docs.
+
+---
+
 ## 2026-04-22 — Docs refresh: cross-repo references, reduced duplication
 
 Backend docs (`examples-service`, `control-plane`, `runtime`, `python-sdk`, `typescript-sdk`) were all refreshed upstream. The UI console docs are realigned to **reference** those sources rather than mirror their endpoint tables. No UI code changes.
