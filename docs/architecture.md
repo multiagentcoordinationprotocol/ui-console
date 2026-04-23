@@ -16,10 +16,31 @@ Build a MACP UI that behaves like an execution operations console:
 flowchart LR
     User[User Browser] --> UI[Next.js App Router UI]
     UI --> BFF[Route Handler Proxy /api/proxy/...]
-    BFF --> ES[Example Service]
+    UI --> JP[Jaeger Proxy /api/jaeger/...]
+    BFF --> ES[Examples Service]
     BFF --> CP[Control Plane]
     CP --> RT[Runtime]
+    JP --> JG[Jaeger]
+    Agents[Agents via macp-sdk] --> RT
 ```
+
+Under the observer-only Control Plane model, agents emit envelopes (messages, signals, context updates) directly to the runtime via `macp-sdk-python` / `macp-sdk-typescript` rather than through CP HTTP endpoints. The UI reads lifecycle, state, and events from CP; it never originates agent traffic.
+
+## Upstream services
+
+This document describes the **UI** architecture. The upstream services have their own
+architecture docs, referenced rather than duplicated here:
+
+| Service | Canonical architecture doc |
+|---|---|
+| Examples Service | [`examples-service/docs/architecture.md`](https://github.com/multiagentcoordinationprotocol/examples-service/blob/main/docs/architecture.md) |
+| Control Plane | [`control-plane/docs/ARCHITECTURE.md`](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/ARCHITECTURE.md) |
+| Runtime | [`runtime/docs/architecture.md`](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/architecture.md) |
+| Python SDK (agent framework) | [`python-sdk/docs/architecture.md`](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/architecture.md) · [`guides/agent-framework.md`](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/guides/agent-framework.md) |
+| TypeScript SDK (agent framework) | [`typescript-sdk/docs/index.md`](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/index.md) · [`guides/agent-framework.md`](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/guides/agent-framework.md) |
+
+For the endpoint surface the UI actually consumes, see [`api-integration.md`](./api-integration.md)
+and [`backend-repo-notes.md`](./backend-repo-notes.md).
 
 ## Front-end layers
 
@@ -29,30 +50,32 @@ The `app/` directory contains route-driven product surfaces:
 
 - dashboard
 - scenarios
-- runs
+- runs (history, live workbench, new-run launch)
 - agents
 - logs
 - traces
 - observability
+- modes (runtime mode registry browser)
+- policies (runtime policy registry browser, RFC-MACP-0012)
 - settings
 
 ### 2. Data access layer
 
 Located in `lib/api/`.
 
-- `fetcher.ts` wraps proxy requests
-- `client.ts` exposes typed UI-facing functions
-- functions switch between demo-mode mocks and real proxy-backed requests
-- includes a response normalization layer (`normalizeRun()`) that reconciles backend response shapes with UI types:
-  - unwraps paginated responses
-  - nests flat `sourceKind`/`sourceRef` into `source: { kind, ref }`
-  - maps `valid` to `ok` for validation responses
-  - extracts envelopes from full run records for cancel/archive
-  - synthesizes `archivedAt` from archive tags
+- `fetcher.ts` wraps proxy requests and exposes the typed `ApiError` class (with `isNotFound` getter for 404 discrimination).
+- `client.ts` exposes typed UI-facing functions (~1180 lines) covering packs, scenarios, launch, runs, state, events, streaming, metrics, traces, artifacts, audit, webhooks, runtime metadata, runtime policies, batch ops, and admin. See [`api-integration.md § Client-side integration functions`](./api-integration.md#client-side-integration-functions) for the full inventory.
+- Functions switch between demo-mode mocks and real proxy-backed requests.
+- Includes response normalization layers that reconcile backend shapes with UI types:
+  - `normalizeRun()` — unwraps paginated responses and nests flat `sourceKind`/`sourceRef` into `source: { kind, ref }`. `archivedAt` is passed through from CP directly (the legacy tag-synthesis bridge is gone).
+  - `normalizeEvent()` — nests flat `sourceKind`/`sourceName`/`subjectKind`/`subjectId`/`rawType` fields into `source` and `subject` objects. Applied by `getRunEvents`, `listEvents`, and the SSE `canonical_event` handler.
+  - `validateRun` maps `valid && errors.length === 0` → `ok` for the UI.
+  - `cancelRun` and `archiveRun` extract `{ ok, runId, status | archived }` envelopes from CP's full run record responses.
+  - Cross-run `listEvents` falls back to per-run fan-out when CP lacks the `/events` endpoint and caches the decision for the browser session.
 
 ### 3. Demo-mode data layer
 
-Located in `lib/data/mock-data.ts`.
+Located in `lib/data/mock-data.ts` (~2000 lines).
 
 Contains:
 
@@ -130,14 +153,20 @@ The browser only calls:
 ```text
 /api/proxy/example/...
 /api/proxy/control-plane/...
+/api/jaeger/...                 # optional, trace-detail deep-dives only
 ```
 
-The route handler:
+The generic proxy handler (`app/api/proxy/[service]/[...path]/route.ts`):
 
 - maps `example` and `control-plane` to upstream base URLs
-- forwards method, headers, and body
-- injects auth when configured
-- keeps secrets server-side
+- forwards method, headers (minus `host` / `connection` / `content-length`), query string, and body
+- injects auth when configured (`x-api-key` for Examples Service, `authorization: Bearer` for Control Plane)
+- strips `content-encoding` on the response and streams the body unchanged
+- appends `x-macp-ui-proxy: <service>` to every response for observability
+
+The Jaeger proxy (`app/api/jaeger/[...path]/route.ts`) forwards GETs to `${JAEGER_BASE_URL}/api/*` and returns `502` when Jaeger is unreachable, so the UI degrades gracefully.
+
+`lib/server/integrations.ts` resolves the base URLs and throws in production when they are missing; empty auth tokens log a warning but do not block the request.
 
 ## Product flows
 
@@ -174,8 +203,6 @@ The route handler:
 Easy additions later:
 
 - RBAC-aware route guards
-- OTEL trace deep-linking
-- richer replay timeline scrubbing
-- saved launch presets
 - annotation/comments on runs
-- diff viewer for prompt or policy versions
+- prompt/policy version diffing (payload structural diff already ships; this would layer on top)
+- alerting / threshold-based notifications on metric surfaces

@@ -6,7 +6,7 @@ Feature-rich Next.js orchestration and observability console for MACP.
 
 This project turns the MACP product blueprint into a working UI scaffold that can:
 
-- launch scenarios from Example Service launch schemas
+- launch scenarios from Examples Service launch schemas
 - compile launch inputs into Control Plane execution requests
 - validate and submit runs to the Control Plane
 - stream live execution updates over SSE
@@ -14,7 +14,7 @@ This project turns the MACP product blueprint into a working UI scaffold that ca
 - inspect node-level payloads, logs, signals, artifacts, and metrics
 - browse historical runs and compare outcomes
 - inspect runtime health, raw metrics, audit logs, and webhook configuration
-- run completely in **demo mode** with mock data or against the uploaded services
+- run completely in **demo mode** with mock data or against the real services
 
 ## What is included
 
@@ -36,14 +36,17 @@ This project turns the MACP product blueprint into a working UI scaffold that ca
 
 ### Technical foundations
 
-- Next.js App Router project structure
+- Next.js 16 App Router (React 19, TypeScript strict)
 - Generic route-handler proxy under `app/api/proxy/[service]/[...path]`
-- Demo mode with rich mock data
+- Optional Jaeger proxy under `app/api/jaeger/[...path]` for trace deep-dives
+- Demo mode with rich mock data (full product surface works with no backends)
 - React Query data layer
-- Zustand preferences store
+- Zustand preferences and launch-presets stores (persisted to `localStorage`)
 - React Flow execution graph
 - Recharts metrics cards
-- Markdown docs for architecture, integration, and change log
+- Vitest + React Testing Library test suite
+- Husky + lint-staged pre-commit hooks
+- Markdown docs for architecture, integration, feature matrix, and change log
 
 ## Quick start
 
@@ -77,7 +80,7 @@ EXAMPLE_SERVICE_API_KEY=
 CONTROL_PLANE_API_KEY=
 ```
 
-Then run the uploaded Example Service and Control Plane locally.
+Then run the Examples Service and Control Plane locally. For a single-command full stack (PostgreSQL + Runtime + Control Plane + Examples Service + UI) see [Local full-stack development](#local-full-stack-development) below.
 
 ### 3. Install dependencies and start
 
@@ -91,6 +94,24 @@ Open:
 ```text
 http://localhost:3000
 ```
+
+## Local full-stack development
+
+Run the UI against real backend services in Docker:
+
+```bash
+npm run local:up       # Start all backends + UI in real mode
+npm run local:down     # Stop and clean up
+npm run local:status   # Check health of running services
+```
+
+| Service | Port | Health |
+|---|---|---|
+| PostgreSQL | 5434 | — |
+| Runtime (gRPC) | 50051 | — |
+| Control Plane | 3001 | `/healthz` |
+| Examples Service | 3100 | `/healthz` |
+| UI Console | 3000 | — |
 
 ## Environment variables
 
@@ -120,6 +141,8 @@ Important values:
 - `/logs` — logs / canonical events
 - `/traces` — traces / artifacts
 - `/observability` — metrics and health
+- `/modes` — runtime mode registry browser
+- `/policies` — runtime policy registry browser (RFC-MACP-0012)
 - `/settings` — preferences, webhooks, audit
 
 ## Demo mode behavior
@@ -143,19 +166,32 @@ This lets the product surface feel complete before wiring every backend behavior
 
 The UI assumes:
 
-- Example Service provides scenario discovery and launch compilation
-- Control Plane provides run lifecycle, state, events, metrics, traces, and audit/webhook endpoints
-- live execution is streamed with SSE
+- Examples Service provides scenario discovery, launch compilation, agent profiles, and optional one-shot bootstrap.
+- Control Plane provides run lifecycle, state projection, canonical events, SSE streaming, metrics, traces, artifacts, audit, webhooks, runtime metadata, and runtime policy registry.
+- Live execution is streamed with SSE (`snapshot`, `canonical_event`, `heartbeat` named events).
+- Under the observer-only Control Plane model, agents emit messages / signals / context updates directly to the runtime via `macp-sdk-python` / `macp-sdk-typescript` — the CP `/runs/:id/{messages,signal,context}` POST endpoints are **removed** (410 Gone).
 
 The browser never talks directly to those services. Instead it calls the Next.js proxy route handlers.
 
+### Upstream repositories
+
+The UI references — but does not duplicate — the docs from the backend repos:
+
+| Repo | Role | Docs |
+|---|---|---|
+| [examples-service](https://github.com/multiagentcoordinationprotocol/examples-service) | Scenario catalog + launch compiler + example-agent bootstrap | [`docs/architecture.md`](https://github.com/multiagentcoordinationprotocol/examples-service/blob/main/docs/architecture.md), [`docs/api-reference.md`](https://github.com/multiagentcoordinationprotocol/examples-service/blob/main/docs/api-reference.md) |
+| [control-plane](https://github.com/multiagentcoordinationprotocol/control-plane) | Observer-only run lifecycle + projections + SSE | [`docs/API.md`](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/API.md), [`docs/ARCHITECTURE.md`](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/ARCHITECTURE.md), [`docs/INTEGRATION.md`](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/INTEGRATION.md) |
+| [runtime](https://github.com/multiagentcoordinationprotocol/runtime) | Rust coordination kernel; gRPC source of truth | [`docs/README.md`](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/README.md), [`docs/API.md`](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/API.md), [`docs/modes.md`](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/modes.md), [`docs/policy.md`](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/policy.md) |
+| [python-sdk](https://github.com/multiagentcoordinationprotocol/python-sdk) | Agent SDK (direct-agent-auth clients) | [`docs/index.md`](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/index.md) |
+| [typescript-sdk](https://github.com/multiagentcoordinationprotocol/typescript-sdk) | Agent SDK (direct-agent-auth clients) | [`docs/index.md`](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/index.md) |
+
 ## Docs
 
-- `docs/architecture.md`
-- `docs/api-integration.md`
-- `docs/feature-matrix.md`
-- `docs/changelog.md`
-- `docs/backend-repo-notes.md`
+- [`docs/architecture.md`](docs/architecture.md) — UI architecture + upstream pointers
+- [`docs/api-integration.md`](docs/api-integration.md) — Proxy model, endpoint usage, normalizers, SSE, launch sequence
+- [`docs/backend-repo-notes.md`](docs/backend-repo-notes.md) — Pointer index into upstream docs
+- [`docs/feature-matrix.md`](docs/feature-matrix.md) — Product surface inventory
+- [`docs/changelog.md`](docs/changelog.md) — Release history
 
 ## Testing
 
@@ -165,7 +201,7 @@ npm run test:watch    # Watch mode
 npm run test:coverage # With coverage report
 ```
 
-Tests use Vitest + React Testing Library. Test files are co-located with source (`.test.ts` / `.test.tsx`).
+Tests use Vitest + React Testing Library. Test files are co-located with source (`.test.ts` / `.test.tsx`). Integration tests covering the UI ↔ Docker-backed Control Plane + Examples Service flow live under `test/integration/`.
 
 ## Development workflow
 
