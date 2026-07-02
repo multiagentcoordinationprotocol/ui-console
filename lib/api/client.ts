@@ -864,6 +864,13 @@ export async function getDashboardOverview(
   const cancelledRuns = cpKpis.cancelledRuns ?? runs.filter((run) => run.status === 'cancelled').length;
   const suspendedRuns = cpKpis.suspendedRuns ?? runs.filter((run) => run.status === 'suspended').length;
   const averageDurationMs = cpKpis.avgDurationMs ?? 0;
+  // Outcome-aware KPIs (control-plane §dashboard). `declinedRuns` can't be
+  // derived from run summaries (no outcome field), so it falls back to 0 on
+  // older backends; `successRate` then reduces to positive-completions over
+  // terminal runs — matching the CP's `successRate` chart series definition.
+  const declinedRuns = cpKpis.declinedRuns ?? 0;
+  const terminalRuns = completedRuns + failedRuns + cancelledRuns;
+  const successRate = cpKpis.successRate ?? (terminalRuns === 0 ? 0 : (completedRuns - declinedRuns) / terminalRuns);
 
   const cpCharts = cpOverview.charts ?? {};
   const toChartPoints = (chart?: { labels: string[]; data: number[] }): ChartPoint[] =>
@@ -874,9 +881,11 @@ export async function getDashboardOverview(
       totalRuns,
       activeRuns,
       completedRuns,
+      declinedRuns,
       failedRuns,
       cancelledRuns,
       suspendedRuns,
+      successRate,
       averageDurationMs,
       totalSignals: cpKpis.totalSignals ?? 0,
       totalCostUsd: cpKpis.totalCostUsd ?? cpKpis.estimatedCostUsd ?? 0,

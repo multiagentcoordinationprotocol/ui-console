@@ -53,7 +53,10 @@ export default function DashboardPage() {
   }
 
   const { kpis, charts, runs, runtimeHealth, packs } = overviewQuery.data;
-  const successRate = kpis.totalRuns === 0 ? 0 : kpis.completedRuns / kpis.totalRuns;
+  // Outcome-aware: a resolved-but-declined decision (negative committed outcome)
+  // resolves as `completed` but is not a "success". Use the control plane's
+  // outcome-aware rate so this KPI matches the success-rate chart.
+  const successRate = kpis.successRate;
   const activeRuns = runs.filter((run) => ['queued', 'starting', 'binding_session', 'running'].includes(run.status));
   const recentRuns = runs.slice(0, 4);
   const recentAudit = auditQuery.data?.data.slice(0, 6) ?? [];
@@ -106,7 +109,7 @@ export default function DashboardPage() {
           <CardContent className="kpi-card">
             <div className="kpi-label">Success rate</div>
             <div className="kpi-value">{formatPercent(successRate)}</div>
-            <div className="kpi-meta">Healthy decision completion rate</div>
+            <div className="kpi-meta">Positive-outcome resolutions ÷ finished runs</div>
           </CardContent>
         </Card>
         <Card>
@@ -134,7 +137,13 @@ export default function DashboardPage() {
             <div className="kpi-value" style={{ color: 'var(--success)' }}>
               {formatNumber(kpis.completedRuns)}
             </div>
-            <div className="kpi-meta">Successfully resolved runs</div>
+            {/* Resolved runs, incl. negative committed outcomes (declines), which
+                land here — NOT under Cancelled — since the session resolved. */}
+            <div className="kpi-meta">
+              {kpis.declinedRuns > 0
+                ? `Resolved runs · ${formatNumber(kpis.declinedRuns)} declined`
+                : 'Resolved runs (approved or declined)'}
+            </div>
           </CardContent>
         </Card>
         <Card>
