@@ -947,10 +947,15 @@ const opsState: RunStateProjection = {
   decision: {
     current: {
       action: 'mitigate_and_communicate',
-      confidence: 0.93,
-      reasons: ['Vendor outage impacted checkout flows.', 'Immediate customer notice reduced escalations.'],
+      confidence: 0.42,
+      reasons: [
+        'Supermajority not reached — proposed emergency mitigation declined.',
+        'Two of four reviewers rejected the vendor-failover cost.'
+      ],
       finalized: true,
-      outcomePositive: true,
+      // Resolved-but-declined: a negative committed outcome (RFC-MACP-0007 §6).
+      // The session resolved (run.status 'completed'), but the decision was "no".
+      outcomePositive: false,
       proposalId: 'incident-ops-004'
     }
   },
@@ -989,9 +994,15 @@ const opsState: RunStateProjection = {
     policyVersion: 'policy.ops.supermajority',
     policyDescription: 'Supermajority approval for operational triage',
     resolvedAt: isoMinutesAgo(414),
-    outcomePositive: true,
+    outcomePositive: false,
+    quorumStatus: 'failed',
     commitmentEvaluations: [
-      { commitmentId: 'ops-eval-001', decision: 'allow', reasons: ['Supermajority achieved'], ts: isoMinutesAgo(415) }
+      {
+        commitmentId: 'ops-eval-001',
+        decision: 'deny',
+        reasons: ['Supermajority not reached (2 of 4 approved)'],
+        ts: isoMinutesAgo(415)
+      }
     ]
   }
 };
@@ -1770,6 +1781,12 @@ export function computeDashboardKpis(runs: RunRecord[] = MOCK_RUNS): DashboardKp
   const failedRuns = runs.filter((run) => run.status === 'failed').length;
   const cancelledRuns = runs.filter((run) => run.status === 'cancelled').length;
   const suspendedRuns = runs.filter((run) => run.status === 'suspended').length;
+  // Resolved-but-declined: completed runs whose committed decision is negative.
+  const declinedRuns = runs.filter(
+    (run) => run.status === 'completed' && MOCK_RUN_STATES[run.id]?.decision.current?.outcomePositive === false
+  ).length;
+  const terminalRuns = completedRuns + failedRuns + cancelledRuns;
+  const successRate = terminalRuns === 0 ? 0 : (completedRuns - declinedRuns) / terminalRuns;
   const includedIds = new Set(runs.map((run) => run.id));
   const metricsForRuns = Object.entries(MOCK_RUN_METRICS).filter(([runId]) => includedIds.has(runId));
   const averageDurationMs =
@@ -1784,9 +1801,11 @@ export function computeDashboardKpis(runs: RunRecord[] = MOCK_RUNS): DashboardKp
     totalRuns,
     activeRuns,
     completedRuns,
+    declinedRuns,
     failedRuns,
     cancelledRuns,
     suspendedRuns,
+    successRate,
     averageDurationMs,
     totalSignals,
     totalCostUsd,

@@ -652,10 +652,24 @@ export interface DashboardKpis {
   totalRuns: number;
   activeRuns: number;
   completedRuns: number;
+  /**
+   * Completed runs whose committed decision was negative (reject-majority
+   * resolved, `outcome_positive=false`). A subset of `completedRuns` — a valid
+   * resolution, but not a "success". Supplied by the control plane; 0 when the
+   * backend predates the field.
+   */
+  declinedRuns: number;
   failedRuns: number;
   cancelledRuns: number;
   /** macp-proto 0.1.3 — runs currently in the non-terminal `suspended` state. */
   suspendedRuns: number;
+  /**
+   * Outcome-aware success rate (0–1): positive-outcome completions over terminal
+   * runs — `(completedRuns - declinedRuns) / (completed + failed + cancelled)`.
+   * Matches the control plane's `successRate` chart series so the KPI card and
+   * the chart agree.
+   */
+  successRate: number;
   averageDurationMs: number;
   totalSignals: number;
   totalCostUsd: number;

@@ -380,7 +380,15 @@ export function buildOutcomeNarrative(
   const badge: OutcomeNarrative['badge'] =
     outcomePositive === true ? 'positive' : outcomePositive === false ? 'negative' : 'neutral';
 
-  if (run.status !== 'completed') {
+  // Treat the run as finalized when the DECISION itself is resolved, not only
+  // when run.status is the literal 'completed'. A reject-majority decision is a
+  // finalized *negative* committed outcome (RFC-MACP-0007 §6); depending on how
+  // the run surfaced (discovered/replayed session, backward-compat labeling) it
+  // may not carry the exact 'completed' status even though the decision is done.
+  // Key strictly off `finalized === true` or a boolean `outcomePositive` so a
+  // null/undefined outcome on a still-running run stays neutral.
+  const decisionFinalized = state.decision.current?.finalized === true || typeof outcomePositive === 'boolean';
+  if (run.status !== 'completed' && !decisionFinalized) {
     return {
       badge: 'neutral',
       headline: `Run ${run.status}`,
@@ -411,7 +419,9 @@ export function buildOutcomeNarrative(
 
   return {
     badge,
-    headline: `Outcome: ${headlineAction}`,
+    // Surface the verdict word so a negative committed outcome reads clearly,
+    // e.g. "Outcome: REJECT · declined" vs "Outcome: APPROVE · approved".
+    headline: `Outcome: ${headlineAction} · ${verdict}`,
     body
   };
 }
